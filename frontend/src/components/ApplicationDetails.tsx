@@ -221,13 +221,13 @@ export const ApplicationDetails: React.FC<ApplicationDetailsProps> = ({
       </section>
 
       {/* =========================================================================
-          SECTION B: Required-Document Checklist
+          SECTION B: Read Documents (Required-Document Checklist)
           ========================================================================= */}
       <section className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-3 gap-2">
           <div className="flex items-center space-x-2 text-slate-800">
             <FileText className="w-5 h-5 text-indigo-700" />
-            <h2 className="text-base font-bold">Section B: Required-Document Checklist</h2>
+            <h2 className="text-base font-bold">Section B: Read Documents & Statutory Checklist</h2>
           </div>
           <p className="text-xs text-slate-500">
             Checklist showing required, submitted, missing, unreadable, expired, and verified documents for <strong>{getCategoryTitle(application.category)}</strong>
@@ -420,13 +420,13 @@ export const ApplicationDetails: React.FC<ApplicationDetailsProps> = ({
       </section>
 
       {/* =========================================================================
-          SECTION C: Automated Scrutiny Findings (Grouped)
+          SECTION C: Check Application Details & Approval Requirements
           ========================================================================= */}
       <section className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-3 gap-2">
           <div className="flex items-center space-x-2 text-slate-800">
             <FileCheck2 className="w-5 h-5 text-blue-700" />
-            <h2 className="text-base font-bold">Section C: Automated Scrutiny Findings</h2>
+            <h2 className="text-base font-bold">Section C: Check Application Details & Approval Requirements</h2>
           </div>
 
           {/* Multi-Run Selector (Compare initial run vs post-correction runs) */}
@@ -579,13 +579,13 @@ export const ApplicationDetails: React.FC<ApplicationDetailsProps> = ({
       </section>
 
       {/* =========================================================================
-          SECTION D: Evidence for Each Finding
+          SECTION D: Verify with Official Sources & Evidence
           ========================================================================= */}
       <section className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4">
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <div className="flex items-center space-x-2 text-slate-800">
             <Search className="w-5 h-5 text-blue-700" />
-            <h2 className="text-base font-bold">Section D: Evidence for Each Scrutiny Finding</h2>
+            <h2 className="text-base font-bold">Section D: Verify with Official Sources & Supporting Evidence</h2>
           </div>
           <span className="text-xs text-slate-500">
             Total Recorded Findings: {allFindings.length}
@@ -601,6 +601,30 @@ export const ApplicationDetails: React.FC<ApplicationDetailsProps> = ({
             {allFindings.map((finding) => {
               const evidence = finding.evidence || {};
               const isSimulated = evidence.is_simulated === true;
+
+              // Understandable verification status mapping
+              let verificationStatusBadge = 'bg-slate-100 text-slate-700';
+              let verificationStatusText = 'Waiting for verification';
+
+              if (finding.review_status === 'RESOLVED') {
+                verificationStatusBadge = 'bg-emerald-50 text-emerald-800 border border-emerald-200';
+                verificationStatusText = 'Verified';
+              } else if (evidence.status === 'SOURCE_UNAVAILABLE' || finding.finding_code.includes('UNAVAILABLE')) {
+                verificationStatusBadge = 'bg-slate-100 text-slate-800 border border-slate-300';
+                verificationStatusText = 'Source unavailable';
+              } else if (evidence.status === 'EXPIRED' || finding.finding_code.includes('EXPIRED') || finding.finding_code.includes('FIRE')) {
+                verificationStatusBadge = 'bg-rose-50 text-rose-800 border border-rose-200';
+                verificationStatusText = 'Expired';
+              } else if (isSimulated) {
+                verificationStatusBadge = 'bg-indigo-50 text-indigo-800 border border-indigo-200';
+                verificationStatusText = 'Demonstration result';
+              } else if (evidence.observed_value && evidence.expected_value && evidence.observed_value !== evidence.expected_value) {
+                verificationStatusBadge = 'bg-amber-50 text-amber-800 border border-amber-200';
+                verificationStatusText = 'Mismatch found';
+              } else {
+                verificationStatusBadge = 'bg-blue-50 text-blue-800 border border-blue-200';
+                verificationStatusText = 'Manual review required';
+              }
 
               return (
                 <div
@@ -670,9 +694,9 @@ export const ApplicationDetails: React.FC<ApplicationDetailsProps> = ({
                     </div>
 
                     <div>
-                      <span className="text-slate-400 font-semibold block uppercase text-[10px]">Result</span>
-                      <span className="text-amber-800 font-bold">
-                        {finding.review_status === 'RESOLVED' ? 'Resolved' : 'Requires Rectification'}
+                      <span className="text-slate-400 font-semibold block uppercase text-[10px]">Verification Status</span>
+                      <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold ${verificationStatusBadge}`}>
+                        {verificationStatusText}
                       </span>
                     </div>
                   </div>
@@ -684,13 +708,13 @@ export const ApplicationDetails: React.FC<ApplicationDetailsProps> = ({
       </section>
 
       {/* =========================================================================
-          SECTION E: Officer Actions & Statutory Decision
+          SECTION E: Correct and Resubmit (Officer Actions & Statutory Decision)
           ========================================================================= */}
       <section className="bg-slate-900 text-white rounded-xl p-6 shadow-md space-y-4">
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
           <div className="flex items-center space-x-2">
             <ShieldCheck className="w-5 h-5 text-blue-400" />
-            <h2 className="text-base font-bold">Section E: Officer Actions & Statutory Decision</h2>
+            <h2 className="text-base font-bold">Section E: Correct and Resubmit (Officer Actions & Statutory Decision)</h2>
           </div>
           <span className="text-xs text-slate-400">
             Active Officer: <strong>{currentUser.full_name}</strong> ({currentUser.designation})

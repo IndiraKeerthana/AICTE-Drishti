@@ -199,9 +199,26 @@ export interface IntegrationServiceItem {
   notes: string;
 }
 
+export interface DocumentDefinition {
+  code: string;
+  name: string;
+  official_clause?: string;
+  expiry_check_required?: boolean;
+  required_fields?: string;
+  condition?: string;
+  purpose?: string;
+  is_confirmed?: boolean;
+}
+
 export interface CategoryInfo {
   code: string;
   title: string;
-  mandatory_documents: string[];
-  optional_documents: string[];
+  description?: string;
+  academic_year?: string;
+  official_source?: string;
+  is_confirmed?: boolean;
+  eligibility_conditions?: string[];
+  mandatory_documents: (string | DocumentDefinition)[];
+  conditional_documents?: (string | DocumentDefinition)[];
+  optional_documents?: (string | DocumentDefinition)[];
 }

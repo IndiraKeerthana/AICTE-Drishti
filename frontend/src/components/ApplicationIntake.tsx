@@ -485,7 +485,10 @@ export const ApplicationIntake: React.FC<ApplicationIntakeProps> = ({
 
           {activeCategory && (
             <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100 text-xs">
-              {activeCategory.mandatory_documents?.map((docCode) => {
+              {activeCategory.mandatory_documents?.map((item) => {
+                const docCode = typeof item === 'string' ? item : item.code;
+                const docName = typeof item === 'string' ? item.replace(/_/g, ' ') : item.name;
+                const docClause = typeof item === 'string' ? 'Statutory requirement under AICTE Approval Process Handbook' : (item.official_clause || 'AICTE APH Guidelines');
                 const attached = attachedFiles[docCode];
                 const errorMsg = fileErrors[docCode];
 
@@ -494,13 +497,13 @@ export const ApplicationIntake: React.FC<ApplicationIntakeProps> = ({
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                       <div>
                         <div className="flex items-center space-x-2">
-                          <span className="font-bold text-slate-900">{docCode.replace(/_/g, ' ')}</span>
+                          <span className="font-bold text-slate-900">{docName}</span>
                           <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-50 text-red-700 border border-red-200">
                             Required
                           </span>
                         </div>
                         <span className="text-[11px] text-slate-500 block mt-0.5">
-                          Statutory requirement under AICTE Approval Process Handbook
+                          {docClause}
                         </span>
                       </div>
 

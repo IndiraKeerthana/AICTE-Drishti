@@ -29,6 +29,43 @@ def get_admin_rules(current_user: UserInfo = Depends(require_role("ADMIN", "OFFI
     """
     return compliance_engine.config
 
+@router.put("/rules")
+def update_admin_rules(
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user: UserInfo = Depends(require_role("ADMIN"))
+):
+    """
+    Restricted to ADMIN: Updates the APH regulatory rules and categories,
+    writes to rules YAML, reloads the engine, and logs to Activity History.
+    """
+    import yaml
+    rules_path = compliance_engine.rules_file
+    with open(rules_path, "w", encoding="utf-8") as f:
+        yaml.safe_dump(payload, f, sort_keys=False)
+
+    compliance_engine.reload()
+
+    AuditEvent.create_chained(
+        db=db,
+        application_id=None,
+        event_type="RULESET_UPDATED",
+        details={
+            "ruleset_version": payload.get("ruleset_version", compliance_engine.ruleset_version),
+            "updated_by": current_user.full_name,
+            "total_rules": len(payload.get("rules", [])),
+            "total_categories": len(payload.get("categories", []))
+        },
+        actor=current_user.full_name or "SYSTEM_ADMIN"
+    )
+    db.commit()
+
+    return {
+        "status": "SUCCESS",
+        "message": "Regulatory rules successfully updated and reloaded.",
+        "ruleset_version": compliance_engine.ruleset_version
+    }
+
 @router.get("/audit")
 def get_admin_audit_history(limit: int = 100, db: Session = Depends(get_db), current_user: UserInfo = Depends(require_role("ADMIN", "OFFICER", "APPROVER"))):
     """

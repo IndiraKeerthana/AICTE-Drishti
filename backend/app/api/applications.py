@@ -260,9 +260,14 @@ def get_application(
     all_cat_codes = list(mandatory_codes)
     for cat in compliance_engine.config.get("categories", []):
         if cat.get("code") == app.category:
+            for opt in cat.get("conditional_documents", []):
+                opt_code = opt.get("code") if isinstance(opt, dict) else opt
+                if opt_code and opt_code not in all_cat_codes:
+                    all_cat_codes.append(opt_code)
             for opt in cat.get("optional_documents", []):
-                if opt not in all_cat_codes:
-                    all_cat_codes.append(opt)
+                opt_code = opt.get("code") if isinstance(opt, dict) else opt
+                if opt_code and opt_code not in all_cat_codes:
+                    all_cat_codes.append(opt_code)
 
     # Also include any uploaded document that might not be in standard list
     for doc_cat in active_docs.keys():

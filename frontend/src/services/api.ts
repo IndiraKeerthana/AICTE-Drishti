@@ -239,3 +239,25 @@ export async function fetchAuditChainVerification() {
   if (!res.ok) throw new Error('Failed to verify audit hash chain');
   return res.json();
 }
+
+export async function updateAdminRules(rulesData: any) {
+  const res = await fetch(`${API_BASE}/admin/rules`, {
+    method: 'PUT',
+    headers: getHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(rulesData),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || 'Failed to update regulatory rules');
+  }
+  return res.json();
+}
+
+export async function runBenchmarkEvaluation() {
+  const res = await fetch(`${API_BASE}/health/benchmark`, {
+    method: 'POST',
+    headers: getHeaders(),
+  });
+  if (!res.ok) throw new Error('Failed to run benchmark evaluation');
+  return res.json();
+}

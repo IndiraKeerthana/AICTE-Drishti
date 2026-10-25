@@ -3,26 +3,24 @@ import {
   LayoutDashboard,
   FileCheck2,
   FilePlus,
-  Bell,
+  BookOpen,
   Settings,
   ShieldCheck
 } from 'lucide-react';
 import { UserInfo } from '../types';
 
-export type NavView = 'dashboard' | 'applications' | 'intake' | 'notifications' | 'administration';
+export type NavView = 'dashboard' | 'applications' | 'intake' | 'request_types' | 'administration';
 
 interface SidebarProps {
   currentView: NavView;
   onNavigate: (view: NavView) => void;
   currentUser: UserInfo;
-  unreadNotificationsCount?: number;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
   currentView,
   onNavigate,
   currentUser,
-  unreadNotificationsCount = 0,
 }) => {
   return (
     <aside className="w-64 bg-slate-900 text-white flex flex-col justify-between shrink-0 shadow-xl border-r border-slate-800">
@@ -37,14 +35,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <span>VerifyAI</span>
               <span className="text-[10px] bg-blue-500/20 text-blue-300 font-semibold px-1.5 py-0.5 rounded border border-blue-400/30">AICTE</span>
             </div>
-            <p className="text-xs text-slate-400 font-medium">Approval Scrutiny Portal</p>
+            <p className="text-xs text-slate-400 font-medium">Scrutiny & Approval System</p>
           </div>
         </div>
 
         {/* Primary 4-Item Navigation Menu */}
         <div className="px-3 py-4 space-y-1.5">
           <div className="px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-            Primary Workspace
+            Primary Navigation
           </div>
 
           {/* 1. Dashboard */}
@@ -86,24 +84,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <span>Application Intake</span>
           </button>
 
-          {/* 4. Notifications */}
+          {/* 4. Request Types & Documentation */}
           <button
-            onClick={() => onNavigate('notifications')}
-            className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-              currentView === 'notifications'
+            onClick={() => onNavigate('request_types')}
+            className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              currentView === 'request_types'
                 ? 'bg-blue-600 text-white shadow-sm'
                 : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
             }`}
           >
-            <div className="flex items-center space-x-3">
-              <Bell className="w-4 h-4" />
-              <span>Notifications</span>
-            </div>
-            {unreadNotificationsCount > 0 && (
-              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500 text-slate-950">
-                {unreadNotificationsCount}
-              </span>
-            )}
+            <BookOpen className="w-4 h-4 text-amber-400" />
+            <span>Request Types & Documentation</span>
           </button>
         </div>
       </div>
@@ -120,7 +111,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           }`}
         >
           <Settings className="w-3.5 h-3.5 text-slate-400" />
-          <span>Administration & Rules</span>
+          <span>Administration</span>
         </button>
 
         {/* User Session Info Card */}

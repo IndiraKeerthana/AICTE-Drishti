@@ -26,8 +26,21 @@ class ComplianceRuleEngine:
     def get_mandatory_documents(self, category_code: str) -> list[str]:
         for cat in self.config.get("categories", []):
             if cat.get("code") == category_code:
-                return cat.get("mandatory_documents", [])
+                docs = cat.get("mandatory_documents", [])
+                result = []
+                for d in docs:
+                    if isinstance(d, dict):
+                        result.append(d.get("code"))
+                    elif isinstance(d, str):
+                        result.append(d)
+                return result
         return []
+
+    def get_category_info(self, category_code: str) -> dict | None:
+        for cat in self.config.get("categories", []):
+            if cat.get("code") == category_code:
+                return cat
+        return None
 
     def get_rules_for_category(self, category_code: str) -> list[dict]:
         matching = []
@@ -41,6 +54,9 @@ class ComplianceRuleEngine:
             if rule.get("rule_code") == rule_code:
                 return rule
         return None
+
+    def reload(self):
+        self.config = self._load_rules()
 
 # Singleton instance
 compliance_engine = ComplianceRuleEngine()

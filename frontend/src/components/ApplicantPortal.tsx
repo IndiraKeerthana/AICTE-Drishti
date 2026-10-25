@@ -377,17 +377,20 @@ export const ApplicantPortal: React.FC<ApplicantPortalProps> = ({
                   <div className="bg-slate-50 p-3 font-semibold text-slate-700">
                     Mandatory Statutory Documents ({activeCategory.mandatory_documents?.length || 0})
                   </div>
-                  {activeCategory.mandatory_documents?.map((docCode, i) => (
-                    <div key={i} className="p-3 flex items-center justify-between">
-                      <div>
-                        <span className="font-bold text-slate-800">{docCode.replace(/_/g, ' ')}</span>
-                        <span className="text-[11px] text-slate-500 block">Required by AICTE APH Chapter Regulations</span>
+                  {activeCategory.mandatory_documents?.map((item, i) => {
+                    const docName = typeof item === 'string' ? item.replace(/_/g, ' ') : item.name;
+                    return (
+                      <div key={i} className="p-3 flex items-center justify-between">
+                        <div>
+                          <span className="font-bold text-slate-800">{docName}</span>
+                          <span className="text-[11px] text-slate-500 block">Required by AICTE APH Chapter Regulations</span>
+                        </div>
+                        <span className="px-2 py-0.5 rounded bg-red-50 text-red-700 border border-red-200 font-bold text-[10px]">
+                          Required
+                        </span>
                       </div>
-                      <span className="px-2 py-0.5 rounded bg-red-50 text-red-700 border border-red-200 font-bold text-[10px]">
-                        Required
-                      </span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 

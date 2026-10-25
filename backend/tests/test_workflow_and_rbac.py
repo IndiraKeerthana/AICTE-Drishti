@@ -203,3 +203,19 @@ def test_admin_and_rules_apis(client):
     audit_res = client.get("/api/admin/audit")
     assert audit_res.status_code == 200
     assert isinstance(audit_res.json(), list)
+
+    # 4. Regulatory rule update RBAC: Applicant cannot update rules
+    applicant_headers = {"X-User-Role": "APPLICANT", "X-User-Id": "inst_1"}
+    unauth_put = client.put("/api/admin/rules", json={"ruleset_version": "2025-2026.v2"}, headers=applicant_headers)
+    assert unauth_put.status_code == 403
+
+    # 5. Admin can update rules and it logs to audit history
+    admin_headers = {"X-User-Role": "ADMIN", "X-User-Id": "admin1"}
+    rules_cfg = client.get("/api/admin/rules").json()
+    auth_put = client.put("/api/admin/rules", json=rules_cfg, headers=admin_headers)
+    assert auth_put.status_code == 200
+    assert auth_put.json()["status"] == "SUCCESS"
+
+    # Verify audit event logged
+    audit_after = client.get("/api/admin/audit", headers=admin_headers).json()
+    assert any(e["event_type"] == "RULESET_UPDATED" for e in audit_after)

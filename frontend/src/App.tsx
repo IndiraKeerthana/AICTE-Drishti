@@ -4,7 +4,7 @@ import { Header } from './components/Header';
 import { DashboardOverview } from './components/DashboardOverview';
 import { ApplicationDetails } from './components/ApplicationDetails';
 import { ApplicationIntake } from './components/ApplicationIntake';
-import { NotificationsView } from './components/NotificationsView';
+import { RequestTypesDocumentation } from './components/RequestTypesDocumentation';
 import { SystemAdminView } from './components/SystemAdminView';
 import { Application, ApplicationDetail, UserInfo, AlertItem } from './types';
 import {
@@ -60,7 +60,6 @@ export function App() {
     fetchUsers()
       .then((users) => {
         if (users && users.length > 0) {
-          // Filter to officer, approver, admin
           const filtered = users.filter(u => u.role !== 'APPLICANT');
           if (filtered.length > 0) {
             setAvailableUsers(filtered);
@@ -167,8 +166,6 @@ export function App() {
     await loadAlerts();
   };
 
-  const unreadAlertsCount = alerts.filter(a => a.status === 'ACTIVE').length;
-
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-slate-100 text-slate-800">
       {/* Primary 4-item Sidebar Navigation */}
@@ -179,7 +176,6 @@ export function App() {
           setSelectedAppId(null);
         }}
         currentUser={currentUser}
-        unreadNotificationsCount={unreadAlertsCount}
       />
 
       {/* Main Officer Workspace */}
@@ -194,9 +190,9 @@ export function App() {
               ? 'Approval Applications Queue'
               : currentView === 'intake'
               ? 'Application Intake & Registration'
-              : currentView === 'notifications'
-              ? 'Scrutiny Notifications & Operational Alerts'
-              : 'Technical Administration & Regulatory Configuration'
+              : currentView === 'request_types'
+              ? 'Request Types & Statutory Documentation'
+              : 'Administration & System Settings'
           }
           currentUser={currentUser}
           availableUsers={availableUsers}
@@ -242,10 +238,8 @@ export function App() {
                 setCurrentView('applications');
               }}
             />
-          ) : currentView === 'notifications' ? (
-            <NotificationsView
-              onSelectApplication={(id) => setSelectedAppId(id)}
-            />
+          ) : currentView === 'request_types' ? (
+            <RequestTypesDocumentation />
           ) : (
             <SystemAdminView />
           )}
