@@ -183,8 +183,9 @@ export async function triggerVerification(applicationId: number) {
   return res.json();
 }
 
-export async function fetchAlerts(): Promise<AlertItem[]> {
-  const res = await fetch(`${API_BASE}/alerts`, { headers: getHeaders() });
+export async function fetchAlerts(statusFilter?: string): Promise<AlertItem[]> {
+  const url = statusFilter ? `${API_BASE}/alerts?status_filter=${encodeURIComponent(statusFilter)}` : `${API_BASE}/alerts`;
+  const res = await fetch(url, { headers: getHeaders() });
   if (!res.ok) throw new Error('Failed to fetch alerts');
   return res.json();
 }

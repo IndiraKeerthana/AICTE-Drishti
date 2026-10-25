@@ -10,12 +10,35 @@ import {
   Building2,
   FileCheck2
 } from 'lucide-react';
-import { Application } from '../types';
+import { Application, AlertItem } from '../types';
 
 interface DashboardOverviewProps {
   applications: Application[];
-  onSelectApplication: (id: number) => void;
+  alerts?: AlertItem[];
+  onSelectApplication: (id: number, findingId?: number) => void;
+  onAcknowledgeAlert?: (id: number) => Promise<void>;
+  onNavigateToApplications?: () => void;
   isQueueView?: boolean;
+}
+
+export function getSeverityBadge(severity: string): { label: string; badgeClass: string } {
+  const norm = severity?.toLowerCase() || '';
+  if (norm.includes('action') || norm.includes('critical') || norm.includes('high')) {
+    return {
+      label: 'Action required',
+      badgeClass: 'bg-red-50 text-red-700 border border-red-200'
+    };
+  }
+  if (norm.includes('waiting') || norm.includes('pending') || norm.includes('unavailable')) {
+    return {
+      label: 'Waiting for verification',
+      badgeClass: 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+    };
+  }
+  return {
+    label: 'Review required',
+    badgeClass: 'bg-amber-50 text-amber-800 border border-amber-200'
+  };
 }
 
 export function getPlainStatus(status: string, finalDecision?: string | null): {
@@ -83,7 +106,10 @@ export function getCategoryTitle(code: string): string {
 
 export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   applications,
+  alerts = [],
   onSelectApplication,
+  onAcknowledgeAlert,
+  onNavigateToApplications,
   isQueueView = false,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -120,6 +146,27 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
       return matchesSearch && matchesCategory && matchesStatus;
     });
   }, [applications, searchTerm, selectedCategory, selectedStatus]);
+
+  const urgencyWeight = (sev: string) => {
+    const s = sev?.toLowerCase() || '';
+    if (s.includes('action') || s.includes('critical')) return 1;
+    if (s.includes('review') || s.includes('high')) return 2;
+    if (s.includes('waiting') || s.includes('pending')) return 3;
+    return 4;
+  };
+
+  const attentionAlerts = useMemo(() => {
+    if (!alerts) return [];
+    return alerts
+      .filter((a) => a.status === 'ACTIVE' || a.status === 'ACKNOWLEDGED')
+      .sort((a, b) => {
+        const diff = urgencyWeight(a.severity) - urgencyWeight(b.severity);
+        if (diff !== 0) return diff;
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
+  }, [alerts]);
+
+  const displayedAlerts = useMemo(() => attentionAlerts.slice(0, 5), [attentionAlerts]);
 
   return (
     <div className="space-y-6">
@@ -181,6 +228,130 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
               <CheckCircle2 className="w-5 h-5" />
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Compact "Needs Your Attention" Section (Shown on Dashboard) */}
+      {!isQueueView && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="p-4 border-b border-slate-200 bg-slate-50/50 flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <div className="w-7 h-7 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center">
+                <AlertTriangle className="w-4 h-4" />
+              </div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-bold text-slate-800">Needs Your Attention</h2>
+                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                  {attentionAlerts.length}
+                </span>
+              </div>
+            </div>
+            <span className="text-xs text-slate-500 font-normal">
+              Applications requiring officer action or follow-up
+            </span>
+          </div>
+
+          {attentionAlerts.length === 0 ? (
+            <div className="p-6 text-center">
+              <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 mx-auto flex items-center justify-center mb-2">
+                <CheckCircle2 className="w-5 h-5" />
+              </div>
+              <p className="text-sm font-bold text-slate-800">No applications currently need your attention.</p>
+              <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
+                All submitted applications are either proceeding smoothly through automated checks or have their statutory decisions recorded.
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {displayedAlerts.map((alert) => {
+                const sev = getSeverityBadge(alert.severity);
+                const matchingApp = applications.find((a) => a.id === alert.application_id);
+                const instName = alert.institution_name || matchingApp?.institution.name || 'Technical Institution';
+                const appRef = alert.application_reference || matchingApp?.application_number || `APP-${alert.application_id}`;
+                const appStatus = getPlainStatus(alert.application_status || matchingApp?.status || '').label;
+                const formattedDate = alert.created_at
+                  ? new Date(alert.created_at).toLocaleDateString(undefined, {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric'
+                    })
+                  : 'Recently';
+
+                return (
+                  <div
+                    key={alert.id}
+                    className="p-4 hover:bg-slate-50/60 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs"
+                  >
+                    <div className="space-y-1.5 flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${sev.badgeClass}`}>
+                          {sev.label}
+                        </span>
+                        <span className="font-bold text-slate-900 truncate">
+                          {instName}
+                        </span>
+                        <span className="text-slate-400">&bull;</span>
+                        <span className="font-mono text-slate-600 font-semibold">
+                          {appRef}
+                        </span>
+                        <span className="text-slate-400">&bull;</span>
+                        <span className="text-[11px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+                          {appStatus}
+                        </span>
+                        {alert.status === 'ACKNOWLEDGED' && (
+                          <span className="text-[10px] text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 font-medium">
+                            Seen by officer
+                          </span>
+                        )}
+                        <span className="text-slate-400 text-[11px] ml-auto md:ml-0">
+                          {formattedDate}
+                        </span>
+                      </div>
+
+                      <p className="text-slate-700 text-xs leading-relaxed">
+                        <strong className="text-slate-900">{alert.title}: </strong>
+                        <span>{alert.message}</span>
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
+                      {alert.status === 'ACTIVE' && onAcknowledgeAlert && (
+                        <button
+                          type="button"
+                          onClick={() => onAcknowledgeAlert(alert.id)}
+                          className="px-2.5 py-1.5 rounded text-[11px] font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+                          title="Mark this alert as seen (does not resolve the underlying deficiency)"
+                        >
+                          Mark as seen
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => onSelectApplication(alert.application_id, alert.finding_id || undefined)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs transition-colors"
+                      >
+                        <span>View Application</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {attentionAlerts.length > 5 && (
+                <div className="p-3 bg-slate-50/50 text-center border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={onNavigateToApplications}
+                    className="text-xs font-semibold text-blue-600 hover:text-blue-800 inline-flex items-center gap-1"
+                  >
+                    <span>Showing top 5 of {attentionAlerts.length} urgent items. View all in Approval Applications Queue</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

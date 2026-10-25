@@ -222,14 +222,20 @@ class Alert(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     application_id = Column(Integer, ForeignKey("applications.id", ondelete="CASCADE"), nullable=False)
+    finding_id = Column(Integer, ForeignKey("findings.id", ondelete="SET NULL"), nullable=True)
+    scrutiny_run_id = Column(Integer, ForeignKey("scrutiny_runs.id", ondelete="SET NULL"), nullable=True)
     alert_type = Column(String(50), nullable=False)
-    severity = Column(String(20), default="HIGH")
+    severity = Column(String(50), default="Review required")
     title = Column(String(255), nullable=False)
     message = Column(Text, nullable=False)
-    status = Column(String(50), default="ACTIVE") # ACTIVE, ACKNOWLEDGED, RESOLVED
+    status = Column(String(50), default="ACTIVE")  # ACTIVE, ACKNOWLEDGED, RESOLVED
     created_at = Column(DateTime, default=get_utc_now)
+    acknowledged_by = Column(String(100), nullable=True)
+    acknowledged_at = Column(DateTime, nullable=True)
 
     application = relationship("Application", back_populates="alerts")
+    finding = relationship("Finding")
+    scrutiny_run = relationship("ScrutinyRun")
 
 
 class ReviewerAction(Base):

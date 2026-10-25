@@ -107,7 +107,7 @@ def execute_automated_scrutiny(
             sev="CRITICAL",
             human_rev=True
         )
-        _upsert_finding(
+        fnd = _upsert_finding(
             db=db,
             app_id=app.id,
             run_id=scrutiny_run.id,
@@ -123,7 +123,16 @@ def execute_automated_scrutiny(
             rec_action="Notify applicant to upload omitted statutory attachments.",
             evidence_class="VERIFIED_FACT"
         )
-        _create_alert(db, app.id, "MISSING_DOCUMENT", "CRITICAL", "Missing Mandatory Documents", f"Application lacks: {', '.join(missing_docs)}")
+        _create_or_update_alert(
+            db=db,
+            app_id=app.id,
+            alert_type="MISSING_DOCUMENT",
+            severity="Action required",
+            title="Required Documents Missing",
+            message=f"Application lacks {len(missing_docs)} mandatory statutory document(s): {', '.join(missing_docs)}.",
+            finding_id=fnd.id,
+            scrutiny_run_id=scrutiny_run.id
+        )
     else:
         record_check(
             code="APH-2026-MANDATORY-DOCS-01",
@@ -133,7 +142,7 @@ def execute_automated_scrutiny(
             obs=f"{len(uploaded_categories)} uploaded",
             explanation="All required statutory documents for application category are present."
         )
-        _resolve_finding_if_exists(db, app.id, f"FND-MISSING-DOCS-{app.id}")
+        _resolve_finding_if_exists(db, app.id, f"FND-MISSING-DOCS-{app.id}", alert_type="MISSING_DOCUMENT")
 
     # --- CHECK 2: Sanctioned Intake vs Ground-Truth Baseline ---
     baseline = db.query(BaselineRecord).filter(
@@ -153,7 +162,7 @@ def execute_automated_scrutiny(
                 sev="HIGH",
                 human_rev=True
             )
-            _upsert_finding(
+            fnd = _upsert_finding(
                 db=db,
                 app_id=app.id,
                 run_id=scrutiny_run.id,
@@ -169,7 +178,16 @@ def execute_automated_scrutiny(
                 rec_action="Verify capacity expansion authorization or issue deficiency notice to applicant.",
                 evidence_class="VERIFIED_FACT"
             )
-            _create_alert(db, app.id, "RECORD_MISMATCH", "HIGH", "Intake Mismatch Detected", f"Declared {app.declared_intake} seats vs approved {baseline.approved_intake} seats.")
+            _create_or_update_alert(
+                db=db,
+                app_id=app.id,
+                alert_type="RECORD_MISMATCH",
+                severity="Review required",
+                title="Application Details Conflict with Reference Record",
+                message=f"Application declares {app.declared_intake} seats vs approved reference of {baseline.approved_intake} seats.",
+                finding_id=fnd.id,
+                scrutiny_run_id=scrutiny_run.id
+            )
         else:
             record_check(
                 code="APH-2026-INTAKE-04",
@@ -179,7 +197,7 @@ def execute_automated_scrutiny(
                 obs=f"{app.declared_intake} Seats",
                 explanation="Declared intake exactly matches baseline approved intake."
             )
-            _resolve_finding_if_exists(db, app.id, f"FND-INTAKE-{app.id}")
+            _resolve_finding_if_exists(db, app.id, f"FND-INTAKE-{app.id}", alert_type="RECORD_MISMATCH")
 
     # --- CHECK 3: Document Expiry Date Validation (e.g. Fire Safety NOC) ---
     fire_doc = uploaded_categories.get("FIRE_SAFETY_NOC")
@@ -202,7 +220,7 @@ def execute_automated_scrutiny(
                     sev="HIGH",
                     human_rev=True
                 )
-                _upsert_finding(
+                fnd = _upsert_finding(
                     db=db,
                     app_id=app.id,
                     run_id=scrutiny_run.id,
@@ -219,7 +237,16 @@ def execute_automated_scrutiny(
                     rec_action="Request applicant to upload a renewed Fire Safety NOC.",
                     evidence_class="VERIFIED_FACT"
                 )
-                _create_alert(db, app.id, "EXPIRED_DOCUMENT", "HIGH", "Expired Fire Safety NOC", f"Fire certificate expired on {expiry_val}")
+                _create_or_update_alert(
+                    db=db,
+                    app_id=app.id,
+                    alert_type="EXPIRED_DOCUMENT",
+                    severity="Action required",
+                    title="Submitted Certificate Appears Expired",
+                    message=f"Fire Safety Certificate expired on {expiry_val}. Valid certificate required.",
+                    finding_id=fnd.id,
+                    scrutiny_run_id=scrutiny_run.id
+                )
             else:
                 record_check(
                     code="APH-2026-NOC-FIRE-02",
@@ -229,13 +256,15 @@ def execute_automated_scrutiny(
                     obs=expiry_val,
                     explanation=f"Fire Safety Certificate is unexpired and valid through {expiry_val}."
                 )
-                _resolve_finding_if_exists(db, app.id, f"FND-EXPIRED-FIRE-{fire_doc.id}")
+                _resolve_finding_if_exists(db, app.id, f"FND-EXPIRED-FIRE", alert_type="EXPIRED_DOCUMENT")
 
     # --- CHECK 4: Cryptographic Duplicate File Detection (SHA-256) ---
     seen_hashes = {}
+    duplicate_detected = False
     for doc in active_docs:
         if doc.sha256_hash in seen_hashes:
             dup_target = seen_hashes[doc.sha256_hash]
+            duplicate_detected = True
             record_check(
                 code="APH-INTEGRITY-DUP-01",
                 category="ANOMALY",
@@ -246,7 +275,7 @@ def execute_automated_scrutiny(
                 sev="CRITICAL",
                 human_rev=True
             )
-            _upsert_finding(
+            fnd = _upsert_finding(
                 db=db,
                 app_id=app.id,
                 run_id=scrutiny_run.id,
@@ -263,9 +292,20 @@ def execute_automated_scrutiny(
                 rec_action="Scrutinize attachments and request genuine separate documents.",
                 evidence_class="POTENTIAL_ANOMALY"
             )
-            _create_alert(db, app.id, "ANOMALY_DETECTED", "CRITICAL", "Identical Duplicate File Detected", f"Hash match between {doc.document_category} and {dup_target.document_category}")
+            _create_or_update_alert(
+                db=db,
+                app_id=app.id,
+                alert_type="ANOMALY_DETECTED",
+                severity="Review required",
+                title="Document Has Indicators Requiring Authenticity Review",
+                message=f"Identical file hash detected between {doc.document_category} and {dup_target.document_category}.",
+                finding_id=fnd.id,
+                scrutiny_run_id=scrutiny_run.id
+            )
         else:
             seen_hashes[doc.sha256_hash] = doc
+    if not duplicate_detected:
+        _resolve_finding_if_exists(db, app.id, "FND-DUP", alert_type="ANOMALY_DETECTED")
 
     # --- CHECK 5: Perceptual Photo Reuse (pHash) ---
     photo_anomalies = check_cross_slot_photo_reuse(active_docs)
@@ -280,7 +320,7 @@ def execute_automated_scrutiny(
             sev="HIGH",
             human_rev=True
         )
-        _upsert_finding(
+        fnd = _upsert_finding(
             db=db,
             app_id=app.id,
             run_id=scrutiny_run.id,
@@ -297,7 +337,18 @@ def execute_automated_scrutiny(
             rec_action="Request physical verification or geo-tagged infrastructure photos.",
             evidence_class="POTENTIAL_ANOMALY"
         )
-        _create_alert(db, app.id, "ANOMALY_DETECTED", "HIGH", "Reused Infrastructure Photo", pa["explanation"])
+        _create_or_update_alert(
+            db=db,
+            app_id=app.id,
+            alert_type="ANOMALY_DETECTED",
+            severity="Review required",
+            title="Infrastructure Photograph Requires Authenticity Review",
+            message=pa["explanation"],
+            finding_id=fnd.id,
+            scrutiny_run_id=scrutiny_run.id
+        )
+    if not photo_anomalies:
+        _resolve_finding_if_exists(db, app.id, "FND-PHASH")
 
     # --- CHECK 6: QR Code Extraction & Issuing Authority Lookup ---
     for doc in active_docs:
@@ -332,6 +383,31 @@ def execute_automated_scrutiny(
                 human_rev=auth_res["requires_human_review"]
             )
 
+            # Official-source verification alerts
+            if auth_res["status"] in ("SOURCE_UNAVAILABLE", "WAITING_VERIFICATION"):
+                _create_or_update_alert(
+                    db=db,
+                    app_id=app.id,
+                    alert_type="AUTHORITY_PENDING",
+                    severity="Waiting for verification",
+                    title="Official-Source Verification Pending or Unavailable",
+                    message=f"{auth_res['source_name']} verification is pending or unreachable for {doc.document_category}. Needs follow-up.",
+                    scrutiny_run_id=scrutiny_run.id
+                )
+            elif auth_res["status"] in ("MANUAL_REVIEW", "MISMATCH_FOUND"):
+                _create_or_update_alert(
+                    db=db,
+                    app_id=app.id,
+                    alert_type="AUTHORITY_REVIEW",
+                    severity="Review required",
+                    title="Official Source Verification Requires Manual Review",
+                    message=f"{auth_res['source_name']} verification for {doc.document_category} flagged: {auth_res['explanation']}",
+                    scrutiny_run_id=scrutiny_run.id
+                )
+            elif auth_res["status"] == "VERIFIED":
+                _resolve_finding_if_exists(db, app.id, f"AUTH-VERIF-{doc.document_category}", alert_type="AUTHORITY_PENDING")
+                _resolve_finding_if_exists(db, app.id, f"AUTH-VERIF-{doc.document_category}", alert_type="AUTHORITY_REVIEW")
+
     # --- CHECK 7: Fuzzy Institution Name Consistency ---
     for doc in active_docs:
         if doc.extracted_text and len(doc.extracted_text) > 50:
@@ -363,8 +439,19 @@ def execute_automated_scrutiny(
     open_findings = db.query(Finding).filter(Finding.application_id == app.id, Finding.review_status == "OPEN").count()
     if open_findings > 0 or failed_checks > 0:
         app.status = "DEFICIENCY_FLAGGED"
+        _resolve_finding_if_exists(db, app.id, "READY_FOR_REVIEW", alert_type="READY_FOR_REVIEW")
     else:
-        app.status = "UNDER_SCRUTINY"
+        app.status = "READY_FOR_REVIEW"
+        if not app.final_decision:
+            _create_or_update_alert(
+                db=db,
+                app_id=app.id,
+                alert_type="READY_FOR_REVIEW",
+                severity="Review required",
+                title="Automated Checks Complete — Ready for Review",
+                message=f"All {total_checks} automated scrutiny checks completed with 0 deficiencies. Application is ready for final decision.",
+                scrutiny_run_id=scrutiny_run.id
+            )
 
     # Record Hash-Chained Audit Event
     AuditEvent.create_chained(
@@ -388,7 +475,23 @@ def execute_automated_scrutiny(
     return scrutiny_run
 
 
-def _upsert_finding(db: Session, app_id: int, run_id: int, code: str, category: str, severity: str, title: str, desc: str, exp: str, obs: str, rule_code: str, rule_desc: str, rec_action: str, doc_id: int = None, evidence_class: str = "VERIFIED_FACT"):
+def _upsert_finding(
+    db: Session,
+    app_id: int,
+    run_id: int,
+    code: str,
+    category: str,
+    severity: str,
+    title: str,
+    desc: str,
+    exp: str,
+    obs: str,
+    rule_code: str,
+    rule_desc: str,
+    rec_action: str,
+    doc_id: int = None,
+    evidence_class: str = "VERIFIED_FACT"
+) -> Finding:
     existing = db.query(Finding).filter(Finding.finding_code == code, Finding.application_id == app_id).first()
     if existing:
         existing.scrutiny_run_id = run_id
@@ -396,6 +499,7 @@ def _upsert_finding(db: Session, app_id: int, run_id: int, code: str, category: 
         existing.expected_value = exp
         existing.observed_value = obs
         existing.updated_at = datetime.datetime.now(datetime.timezone.utc)
+        return existing
     else:
         finding = Finding(
             finding_code=code,
@@ -416,27 +520,70 @@ def _upsert_finding(db: Session, app_id: int, run_id: int, code: str, category: 
             created_at=datetime.datetime.now(datetime.timezone.utc)
         )
         db.add(finding)
+        db.flush()
+        return finding
 
-def _resolve_finding_if_exists(db: Session, app_id: int, code_prefix: str):
+
+def _resolve_finding_if_exists(db: Session, app_id: int, code_prefix: str, alert_type: str = None):
     findings = db.query(Finding).filter(
         Finding.application_id == app_id,
         Finding.finding_code.like(f"{code_prefix}%"),
-        Finding.review_status == "OPEN"
+        Finding.review_status != "RESOLVED"
     ).all()
     for f in findings:
         f.review_status = "RESOLVED"
         f.resolution_notes = "Automatically resolved upon re-scrutiny verification success."
         f.updated_at = datetime.datetime.now(datetime.timezone.utc)
 
-def _create_alert(db: Session, app_id: int, alert_type: str, severity: str, title: str, message: str):
-    existing = db.query(Alert).filter(
+        # Also resolve linked active/acknowledged alerts
+        alerts = db.query(Alert).filter(
+            Alert.application_id == app_id,
+            Alert.finding_id == f.id,
+            Alert.status.in_(["ACTIVE", "ACKNOWLEDGED"])
+        ).all()
+        for a in alerts:
+            a.status = "RESOLVED"
+
+    if alert_type:
+        type_alerts = db.query(Alert).filter(
+            Alert.application_id == app_id,
+            Alert.alert_type == alert_type,
+            Alert.status.in_(["ACTIVE", "ACKNOWLEDGED"])
+        ).all()
+        for a in type_alerts:
+            a.status = "RESOLVED"
+
+
+def _create_or_update_alert(
+    db: Session,
+    app_id: int,
+    alert_type: str,
+    severity: str,
+    title: str,
+    message: str,
+    finding_id: int = None,
+    scrutiny_run_id: int = None
+) -> Alert:
+    query = db.query(Alert).filter(
         Alert.application_id == app_id,
-        Alert.alert_type == alert_type,
-        Alert.status == "ACTIVE"
-    ).first()
-    if not existing:
+        Alert.status.in_(["ACTIVE", "ACKNOWLEDGED"])
+    )
+    if finding_id:
+        existing = query.filter(Alert.finding_id == finding_id).first()
+    else:
+        existing = query.filter(Alert.alert_type == alert_type).first()
+
+    if existing:
+        existing.scrutiny_run_id = scrutiny_run_id or existing.scrutiny_run_id
+        existing.title = title
+        existing.message = message
+        existing.severity = severity
+        return existing
+    else:
         alert = Alert(
             application_id=app_id,
+            finding_id=finding_id,
+            scrutiny_run_id=scrutiny_run_id,
             alert_type=alert_type,
             severity=severity,
             title=title,
@@ -445,3 +592,9 @@ def _create_alert(db: Session, app_id: int, alert_type: str, severity: str, titl
             created_at=datetime.datetime.now(datetime.timezone.utc)
         )
         db.add(alert)
+        db.flush()
+        return alert
+
+
+def _create_alert(db: Session, app_id: int, alert_type: str, severity: str, title: str, message: str):
+    return _create_or_update_alert(db, app_id, alert_type, severity, title, message)

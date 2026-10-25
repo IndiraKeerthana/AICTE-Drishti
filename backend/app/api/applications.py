@@ -458,16 +458,25 @@ def issue_deficiency_notice(
 
     app.status = "DEFICIENCY_FLAGGED"
 
-    # Create official alert
-    alert = Alert(
-        application_id=app.id,
-        alert_type="DEFICIENCY_NOTICE",
-        severity="HIGH",
-        title=f"Deficiency Notice Issued for {app.application_number}",
-        message=f"{officer_name} requested corrections: {payload.instructions}",
-        status="ACTIVE"
-    )
-    db.add(alert)
+    # Create or update official alert
+    existing_alert = db.query(Alert).filter(
+        Alert.application_id == app.id,
+        Alert.alert_type == "DEFICIENCY_NOTICE",
+        Alert.status.in_(["ACTIVE", "ACKNOWLEDGED"])
+    ).first()
+    if existing_alert:
+        existing_alert.message = f"{officer_name} requested corrections: {payload.instructions}"
+        existing_alert.severity = "Action required"
+    else:
+        alert = Alert(
+            application_id=app.id,
+            alert_type="DEFICIENCY_NOTICE",
+            severity="Action required",
+            title=f"Deficiency Notice Issued ({app.application_number})",
+            message=f"{officer_name} requested corrections: {payload.instructions}",
+            status="ACTIVE"
+        )
+        db.add(alert)
 
     # Chained audit event
     AuditEvent.create_chained(

@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import Application, ReviewerAction, AuditEvent
+from app.models import Application, ReviewerAction, AuditEvent, Alert
 from app.api.auth import get_current_user, require_role, UserInfo
 
 router = APIRouter(tags=["Officer Final Regulatory Decision"])
@@ -51,6 +51,14 @@ def record_final_decision(
         app.status = "REJECTED"
     elif payload.decision == "DEFICIENCY_NOTICE":
         app.status = "DEFICIENCY_FLAGGED"
+
+    if payload.decision in ("RECOMMEND_APPROVAL", "RECOMMEND_REJECTION"):
+        active_alerts = db.query(Alert).filter(
+            Alert.application_id == app.id,
+            Alert.status.in_(["ACTIVE", "ACKNOWLEDGED"])
+        ).all()
+        for a in active_alerts:
+            a.status = "RESOLVED"
 
     # Record ReviewerAction entry
     action = ReviewerAction(

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import Finding, ReviewerAction, AuditEvent, Application
+from app.models import Finding, ReviewerAction, AuditEvent, Application, Alert
 from app.schemas import FindingResponse, ReviewerActionCreate, ReviewerActionResponse
 
 router = APIRouter(tags=["Findings & Reviewer Actions"])
@@ -38,6 +38,15 @@ def record_reviewer_action(
         finding.review_status = "OVERRIDDEN"
     elif action_type == "RESOLVE":
         finding.review_status = "RESOLVED"
+
+    if action_type in ("RESOLVE", "OVERRIDE"):
+        linked_alerts = db.query(Alert).filter(
+            Alert.application_id == finding.application_id,
+            Alert.finding_id == finding.id,
+            Alert.status.in_(["ACTIVE", "ACKNOWLEDGED"])
+        ).all()
+        for a in linked_alerts:
+            a.status = "RESOLVED"
 
     finding.resolution_notes = payload.justification_remarks
 

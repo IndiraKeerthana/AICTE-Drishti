@@ -117,12 +117,19 @@ export interface AuditEvent {
 export interface AlertItem {
   id: number;
   application_id: number;
+  finding_id?: number | null;
+  scrutiny_run_id?: number | null;
+  institution_name?: string;
+  application_reference?: string;
+  application_status?: string;
   alert_type: string;
   severity: string;
   title: string;
   message: string;
-  status: string;
+  status: string; // ACTIVE, ACKNOWLEDGED, RESOLVED
   created_at: string;
+  acknowledged_by?: string | null;
+  acknowledged_at?: string | null;
 }
 
 export interface ScrutinyRun {

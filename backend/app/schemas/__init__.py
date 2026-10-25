@@ -109,12 +109,19 @@ class ScrutinyRunResponse(BaseModel):
 class AlertResponse(BaseModel):
     id: int
     application_id: int
+    finding_id: Optional[int] = None
+    scrutiny_run_id: Optional[int] = None
+    institution_name: Optional[str] = None
+    application_reference: Optional[str] = None
+    application_status: Optional[str] = None
     alert_type: str
     severity: str
     title: str
     message: str
     status: str
     created_at: datetime.datetime
+    acknowledged_by: Optional[str] = None
+    acknowledged_at: Optional[datetime.datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 

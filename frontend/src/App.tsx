@@ -11,6 +11,7 @@ import {
   fetchApplications,
   fetchApplicationDetail,
   fetchAlerts,
+  acknowledgeAlert,
   fetchUsers,
   setSessionAuth,
   issueDeficiencyNotice,
@@ -218,12 +219,23 @@ export function App() {
           ) : currentView === 'dashboard' ? (
             <DashboardOverview
               applications={applications}
+              alerts={alerts}
               onSelectApplication={(id) => setSelectedAppId(id)}
+              onAcknowledgeAlert={async (alertId) => {
+                try {
+                  await acknowledgeAlert(alertId);
+                  await loadAlerts();
+                } catch (err) {
+                  console.error('Failed to acknowledge alert:', err);
+                }
+              }}
+              onNavigateToApplications={() => setCurrentView('applications')}
               isQueueView={false}
             />
           ) : currentView === 'applications' ? (
             <DashboardOverview
               applications={applications}
+              alerts={alerts}
               onSelectApplication={(id) => setSelectedAppId(id)}
               isQueueView={true}
             />
