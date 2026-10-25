@@ -1,0 +1,103 @@
+ruleset_version: "2025-2026.v1"
+academic_year: "2026-2027"
+handbook_reference: "AICTE Approval Process Handbook (APH) 2024-2027 Guidelines [PLACEHOLDER PENDING OFFICIAL HANDBOOK MAPPING]"
+status: "ACTIVE"
+
+categories:
+  - code: "INCREASE_INTAKE"
+    title: "Increase in Sanctioned Intake / Addition of New Course"
+    mandatory_documents:
+      - "LAND_TITLE_DEED"
+      - "BUILDING_PLAN"
+      - "FIRE_SAFETY_NOC"
+      - "AFFILIATION_LETTER"
+      - "FACULTY_ROSTER"
+      - "BALANCE_SHEET"
+    optional_documents:
+      - "LAB_INFRASTRUCTURE_PHOTO"
+      - "BOARD_RESOLUTION"
+
+  - code: "NEW_INSTITUTE"
+    title: "Establishment of New Technical Institution"
+    mandatory_documents:
+      - "LAND_TITLE_DEED"
+      - "BUILDING_PLAN"
+      - "FIRE_SAFETY_NOC"
+      - "AFFILIATION_LETTER"
+      - "BALANCE_SHEET"
+    optional_documents:
+      - "LAB_INFRASTRUCTURE_PHOTO"
+
+  - code: "EOA_REGULAR"
+    title: "Extension of Approval (EoA) Regular"
+    mandatory_documents:
+      - "FIRE_SAFETY_NOC"
+      - "AFFILIATION_LETTER"
+      - "FACULTY_ROSTER"
+    optional_documents:
+      - "BALANCE_SHEET"
+
+rules:
+  - rule_code: "APH-2026-MANDATORY-DOCS-01"
+    version: "1.0"
+    name: "Mandatory Document Completeness"
+    category_codes: ["INCREASE_INTAKE", "NEW_INSTITUTE", "EOA_REGULAR"]
+    severity: "CRITICAL"
+    is_mandatory: true
+    clause_placeholder: "APH Section 1.4, Mandatory Documentation Checklist [PLACEHOLDER PENDING HANDBOOK MAPPING]"
+    description: "Every statutory document required for the designated application category must be uploaded and valid."
+    recommended_action: "Issue formal deficiency query listing missing mandatory document categories."
+
+  - rule_code: "APH-2026-NOC-FIRE-02"
+    version: "1.0"
+    name: "Fire and Life Safety Certificate Validity"
+    category_codes: ["INCREASE_INTAKE", "NEW_INSTITUTE", "EOA_REGULAR"]
+    severity: "HIGH"
+    is_mandatory: true
+    clause_placeholder: "APH Chapter I, Clause 2.4.1 (Life & Fire Safety) [PLACEHOLDER PENDING HANDBOOK MAPPING]"
+    description: "The Fire and Life Safety NOC issued by competent state/municipal authority must remain unexpired as of the scrutiny date."
+    recommended_action: "Require applicant to submit a renewed Fire Safety Certificate with a valid unexpired period."
+
+  - rule_code: "APH-2026-LAND-03"
+    version: "1.0"
+    name: "Minimum Campus Land Norm"
+    category_codes: ["INCREASE_INTAKE", "NEW_INSTITUTE"]
+    severity: "CRITICAL"
+    is_mandatory: true
+    clause_placeholder: "APH Chapter I, Table 1.1 Land Norms [PLACEHOLDER PENDING HANDBOOK MAPPING]"
+    min_land_acres_rural: 7.50
+    min_land_acres_urban: 2.50
+    description: "Institutions offering UG Technical courses must possess minimum contiguous registered land (7.50 acres for Rural; 2.50 acres for Urban)."
+    recommended_action: "Verify revenue title deed or municipal land conversion certificate to confirm land requirement."
+
+  - rule_code: "APH-2026-INTAKE-04"
+    version: "1.0"
+    name: "Sanctioned Intake Baseline Reconciliation"
+    category_codes: ["INCREASE_INTAKE"]
+    severity: "HIGH"
+    is_mandatory: true
+    clause_placeholder: "APH Chapter II, Clause 4.2 Approved Intake Expansion [PLACEHOLDER PENDING HANDBOOK MAPPING]"
+    description: "The declared existing intake must match the approved intake recorded in the baseline EoA of the preceding Academic Year."
+    recommended_action: "Reconcile with official AICTE past approvals. If unapproved, request deficiency justification."
+
+  - rule_code: "APH-2026-FSR-05"
+    version: "1.0"
+    name: "Faculty-to-Student Cadre Ratio"
+    category_codes: ["INCREASE_INTAKE", "EOA_REGULAR"]
+    severity: "HIGH"
+    is_mandatory: false
+    clause_placeholder: "APH Chapter VII, Clause 7.1 Cadre Ratio & FSR Norms [PLACEHOLDER PENDING HANDBOOK MAPPING]"
+    max_students_per_faculty: 20
+    description: "Engineering institutions must maintain a minimum Faculty-to-Student Ratio (FSR) of 1:15 or 1:20 based on approved intake."
+    recommended_action: "Inspect faculty roster and salary disbursements to verify sufficient sanctioned teaching positions."
+
+  - rule_code: "APH-2026-NAME-06"
+    version: "1.0"
+    name: "Institution Title Consistency"
+    category_codes: ["INCREASE_INTAKE", "NEW_INSTITUTE", "EOA_REGULAR"]
+    severity: "MEDIUM"
+    is_mandatory: false
+    clause_placeholder: "APH Chapter I, General Requirements [PLACEHOLDER PENDING HANDBOOK MAPPING]"
+    min_fuzzy_match_ratio: 75.0
+    description: "Institutional title on supporting land title, affiliation order, and certificates must match registered AICTE title within acceptable token variation."
+    recommended_action: "Verify whether a formal Name Change approval gazette exists, or flag for scrutiny officer review."
