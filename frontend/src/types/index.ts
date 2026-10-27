@@ -89,6 +89,7 @@ export interface Finding {
   recommended_action: string;
   review_status: 'OPEN' | 'ACKNOWLEDGED' | 'RECTIFICATION_REQUESTED' | 'RESOLVED' | 'OVERRIDDEN';
   resolution_notes?: string;
+  evidence_classification?: string;
   created_at: string;
   updated_at: string;
 }

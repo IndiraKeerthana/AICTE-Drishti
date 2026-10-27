@@ -52,6 +52,7 @@ export function App() {
   const [availableUsers, setAvailableUsers] = useState<UserInfo[]>(DEFAULT_USERS);
   const [applications, setApplications] = useState<Application[]>([]);
   const [selectedAppId, setSelectedAppId] = useState<number | null>(null);
+  const [targetFindingId, setTargetFindingId] = useState<number | null>(null);
   const [selectedAppDetail, setSelectedAppDetail] = useState<ApplicationDetail | null>(null);
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -175,12 +176,22 @@ export function App() {
         onNavigate={(view) => {
           setCurrentView(view);
           setSelectedAppId(null);
+          setTargetFindingId(null);
         }}
         currentUser={currentUser}
       />
 
       {/* Main Officer Workspace */}
       <div className="flex-1 flex flex-col h-full overflow-hidden">
+        {/* Compact Persistent Prototype Transparency Banner */}
+        <div className="bg-amber-400 text-slate-900 px-4 py-1 text-center text-[11px] font-bold tracking-wider flex items-center justify-center gap-2 shadow-sm shrink-0 border-b border-amber-500">
+          <span className="inline-block w-2 h-2 rounded-full bg-amber-950 animate-pulse"></span>
+          <span>PROTOTYPE &middot; SYNTHETIC DATA ONLY</span>
+          <span className="text-[10px] font-medium text-slate-800 ml-2 hidden sm:inline">
+            Demonstration environment for AICTE scrutiny decision-support &bull; Not connected to live production records
+          </span>
+        </div>
+
         <Header
           pageTitle={
             selectedAppDetail
@@ -188,7 +199,9 @@ export function App() {
               : currentView === 'dashboard'
               ? 'Officer Scrutiny Dashboard'
               : currentView === 'applications'
-              ? 'Approval Applications Queue'
+              ? 'All Applications Queue'
+              : currentView === 'ready_for_approval'
+              ? 'Ready for Approval Queue'
               : currentView === 'intake'
               ? 'Application Intake & Registration'
               : currentView === 'request_types'
@@ -205,7 +218,11 @@ export function App() {
             <ApplicationDetails
               application={selectedAppDetail}
               currentUser={currentUser}
-              onBack={() => setSelectedAppId(null)}
+              targetFindingId={targetFindingId}
+              onBack={() => {
+                setSelectedAppId(null);
+                setTargetFindingId(null);
+              }}
               onRefresh={async () => {
                 if (selectedAppId) {
                   await loadDetail(selectedAppId);
@@ -220,7 +237,10 @@ export function App() {
             <DashboardOverview
               applications={applications}
               alerts={alerts}
-              onSelectApplication={(id) => setSelectedAppId(id)}
+              onSelectApplication={(id, findingId) => {
+                setSelectedAppId(id);
+                setTargetFindingId(findingId ?? null);
+              }}
               onAcknowledgeAlert={async (alertId) => {
                 try {
                   await acknowledgeAlert(alertId);
@@ -236,14 +256,29 @@ export function App() {
             <DashboardOverview
               applications={applications}
               alerts={alerts}
-              onSelectApplication={(id) => setSelectedAppId(id)}
+              onSelectApplication={(id, findingId) => {
+                setSelectedAppId(id);
+                setTargetFindingId(findingId ?? null);
+              }}
               isQueueView={true}
+            />
+          ) : currentView === 'ready_for_approval' ? (
+            <DashboardOverview
+              applications={applications}
+              alerts={alerts}
+              onSelectApplication={(id, findingId) => {
+                setSelectedAppId(id);
+                setTargetFindingId(findingId ?? null);
+              }}
+              isQueueView={true}
+              isReadyForApprovalView={true}
             />
           ) : currentView === 'intake' ? (
             <ApplicationIntake
               onApplicationCreated={async (newId) => {
                 await loadApplications();
                 setSelectedAppId(newId);
+                setTargetFindingId(null);
               }}
               onNavigateToApplications={async () => {
                 await loadApplications();
@@ -256,6 +291,21 @@ export function App() {
             <SystemAdminView />
           )}
         </main>
+
+        {/* Visible Scrutiny Decision Authority Footer */}
+        <footer className="h-8 bg-slate-900 text-slate-300 border-t border-slate-800 px-6 flex items-center justify-between text-xs shrink-0 select-none">
+          <div className="flex items-center space-x-2">
+            <span className="inline-block w-2 h-2 rounded-full bg-emerald-400"></span>
+            <span className="font-semibold text-white tracking-wide">
+              AI flags and explains. The authorised officer decides.
+            </span>
+          </div>
+          <div className="hidden md:flex items-center space-x-4 text-[11px] text-slate-400">
+            <span>AICTE Approval Process Handbook (APH) Scrutiny Support</span>
+            <span>&bull;</span>
+            <span>Authorised Official: <strong className="text-slate-200">AICTE Official</strong> (Scrutiny & Approval Officer)</span>
+          </div>
+        </footer>
       </div>
     </div>
   );

@@ -1,6 +1,8 @@
+import { PortalSimulator } from './PortalSimulator';
 import React, { useState, useEffect } from 'react';
 import {
   Settings,
+  Terminal,
   Users,
   BookOpen,
   Link2,
@@ -30,7 +32,7 @@ import {
 } from '../services/api';
 
 export const SystemAdminView: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'integrations' | 'users' | 'rules' | 'audit' | 'test_results'>('integrations');
+  const [activeTab, setActiveTab] = useState<'integrations' | 'users' | 'rules' | 'audit' | 'test_results' | 'simulator'>('integrations');
   const [integrations, setIntegrations] = useState<IntegrationServiceItem[]>([]);
   const [users, setUsers] = useState<UserInfo[]>([]);
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
@@ -577,6 +579,13 @@ export const SystemAdminView: React.FC = () => {
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* TAB 6: Portal Simulator */}
+        {activeTab === 'simulator' && (
+          <div className="space-y-4">
+            <PortalSimulator />
           </div>
         )}
 

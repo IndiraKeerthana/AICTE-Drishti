@@ -1,19 +1,17 @@
 import React from 'react';
-import { ShieldCheck, User, Users } from 'lucide-react';
+import { ShieldCheck, User } from 'lucide-react';
 import { UserInfo } from '../types';
 
 interface HeaderProps {
   pageTitle: string;
   currentUser: UserInfo;
-  availableUsers: UserInfo[];
-  onSwitchUser: (user: UserInfo) => void;
+  availableUsers?: UserInfo[];
+  onSwitchUser?: (user: UserInfo) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   pageTitle,
   currentUser,
-  availableUsers,
-  onSwitchUser,
 }) => {
   return (
     <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between shadow-sm shrink-0">
@@ -26,37 +24,27 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       <div className="flex items-center space-x-3">
-        {/* Active Session & Role Switcher */}
-        <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1">
-          <Users className="w-3.5 h-3.5 text-slate-500" />
-          <span className="text-[11px] text-slate-500 font-medium">Session:</span>
-          <select
-            value={currentUser.username}
-            onChange={(e) => {
-              const u = availableUsers.find(user => user.username === e.target.value);
-              if (u) onSwitchUser(u);
-            }}
-            className="text-xs font-semibold bg-transparent border-none text-slate-800 focus:outline-none cursor-pointer"
-          >
-            {availableUsers.map((u) => (
-              <option key={u.username} value={u.username}>
-                {u.full_name} ({u.role})
-              </option>
-            ))}
-          </select>
+        {/* Authorised AICTE Official Session Badge */}
+        <div className="flex items-center space-x-2 bg-blue-50 border border-blue-200/80 rounded-lg px-3 py-1.5 shadow-xs">
+          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+          <span className="text-xs font-bold text-blue-950">AICTE Official</span>
+          <span className="text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.2 rounded font-semibold border border-blue-200">
+            Authorised Scrutiny Session
+          </span>
         </div>
 
         {/* User Avatar */}
         <div className="flex items-center space-x-2 pl-2 border-l border-slate-200">
-          <div className="w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center font-bold text-xs shadow-sm">
-            {currentUser.full_name?.charAt(0) || 'U'}
+          <div className="w-8 h-8 rounded-full bg-blue-800 text-white flex items-center justify-center font-bold text-xs shadow-sm">
+            AO
           </div>
           <div className="hidden sm:block text-left">
-            <p className="text-xs font-bold text-slate-800 leading-tight">{currentUser.full_name}</p>
-            <p className="text-[10px] text-slate-500">{currentUser.designation}</p>
+            <p className="text-xs font-bold text-slate-800 leading-tight">AICTE Official</p>
+            <p className="text-[10px] text-slate-500">Dr. V. Sharma (Scrutiny Officer)</p>
           </div>
         </div>
       </div>
     </header>
   );
 };
+

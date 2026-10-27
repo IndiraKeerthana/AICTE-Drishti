@@ -2,6 +2,7 @@ import React from 'react';
 import {
   LayoutDashboard,
   FileCheck2,
+  CheckCircle2,
   FilePlus,
   BookOpen,
   Settings,
@@ -9,7 +10,7 @@ import {
 } from 'lucide-react';
 import { UserInfo } from '../types';
 
-export type NavView = 'dashboard' | 'applications' | 'intake' | 'request_types' | 'administration';
+export type NavView = 'dashboard' | 'applications' | 'ready_for_approval' | 'intake' | 'request_types' | 'administration';
 
 interface SidebarProps {
   currentView: NavView;
@@ -39,7 +40,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         </div>
 
-        {/* Primary 4-Item Navigation Menu */}
+        {/* Primary 5-Item Navigation Menu */}
         <div className="px-3 py-4 space-y-1.5">
           <div className="px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
             Primary Navigation
@@ -58,7 +59,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <span>Dashboard</span>
           </button>
 
-          {/* 2. Approval Applications */}
+          {/* 2. All Applications */}
           <button
             onClick={() => onNavigate('applications')}
             className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
@@ -68,10 +69,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
             }`}
           >
             <FileCheck2 className="w-4 h-4" />
-            <span>Approval Applications</span>
+            <span>All Applications</span>
           </button>
 
-          {/* 3. Application Intake */}
+          {/* 3. Ready for Approval */}
+          <button
+            onClick={() => onNavigate('ready_for_approval')}
+            className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              currentView === 'ready_for_approval'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+            }`}
+          >
+            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            <span>Ready for Approval</span>
+          </button>
+
+          {/* 4. Application Intake */}
           <button
             onClick={() => onNavigate('intake')}
             className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
@@ -80,11 +94,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
             }`}
           >
-            <FilePlus className="w-4 h-4 text-emerald-400" />
+            <FilePlus className="w-4 h-4 text-sky-400" />
             <span>Application Intake</span>
           </button>
 
-          {/* 4. Request Types & Documentation */}
+          {/* 5. Request Types & Documentation */}
           <button
             onClick={() => onNavigate('request_types')}
             className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
@@ -99,7 +113,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </div>
 
-      {/* Bottom Area: Secondary Administration & Active User Session */}
+      {/* Bottom Area: Secondary Administration & Active Officer Session */}
       <div className="p-3 border-t border-slate-800/80 space-y-2">
         {/* Secondary Administration Section */}
         <button
@@ -118,11 +132,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="px-3 py-2 bg-slate-800/50 rounded-lg border border-slate-800">
           <div className="flex items-center space-x-2">
             <div className="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center text-[10px] font-bold text-white shrink-0">
-              {currentUser.full_name?.charAt(0) || 'U'}
+              AO
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-bold text-slate-200 truncate">{currentUser.full_name}</p>
-              <p className="text-[10px] text-slate-400 truncate">{currentUser.designation}</p>
+              <p className="text-xs font-bold text-slate-200 truncate">AICTE Official</p>
+              <p className="text-[10px] text-slate-400 truncate">Scrutiny & Approval Officer</p>
             </div>
           </div>
         </div>
@@ -130,3 +144,4 @@ export const Sidebar: React.FC<SidebarProps> = ({
     </aside>
   );
 };
+

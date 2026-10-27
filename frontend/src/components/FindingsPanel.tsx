@@ -83,6 +83,19 @@ export const FindingsPanel: React.FC<FindingsPanelProps> = ({
                     <span className="bg-slate-100 text-slate-700 text-[10px] font-semibold px-2 py-0.5 rounded">
                       {f.category.replace('_', ' ')}
                     </span>
+                    {f.evidence_classification && (
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                        f.evidence_classification === 'VERIFIED_FACT' ? 'bg-emerald-50 text-emerald-800 border-emerald-300' :
+                        f.evidence_classification === 'AUTOMATED_INFERENCE' ? 'bg-blue-50 text-blue-800 border-blue-300' :
+                        f.evidence_classification === 'POTENTIAL_ANOMALY' ? 'bg-amber-50 text-amber-800 border-amber-300' :
+                        'bg-slate-100 text-slate-700 border-slate-300'
+                      }`}>
+                        {f.evidence_classification === 'VERIFIED_FACT' ? 'Verified Fact' :
+                         f.evidence_classification === 'AUTOMATED_INFERENCE' ? 'Automated Inference' :
+                         f.evidence_classification === 'POTENTIAL_ANOMALY' ? 'Potential Anomaly' :
+                         f.evidence_classification.replace(/_/g, ' ')}
+                      </span>
+                    )}
                   </div>
                   <h4 className="text-sm font-bold text-slate-800 mt-1">
                     {f.title}

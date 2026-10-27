@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 from PIL import Image
 import imagehash
@@ -50,18 +51,59 @@ def inspect_pdf_metadata_and_updates(storage_path: str) -> dict:
 
     return result
 
+def _normalize_institution_name(text: str) -> str:
+    """Normalizes standard institutional abbreviations for robust comparison."""
+    s = text.lower()
+    abbreviations = {
+        r'\bgovt\.?\b': 'government',
+        r'\bengg\.?\b': 'engineering',
+        r'\binst\.?\b': 'institute',
+        r'\btech\.?\b': 'technology',
+        r'\bcoll\.?\b': 'college',
+        r'\bdept\.?\b': 'department',
+        r'\bpoly\.?\b': 'polytechnic',
+        r'\bmgmt\.?\b': 'management',
+        r'\buniv\.?\b': 'university',
+    }
+    for pattern, rep in abbreviations.items():
+        s = re.sub(pattern, rep, s)
+    s = re.sub(r'[^a-z0-9\s]', ' ', s)
+    return ' '.join(s.split())
+
+
 def evaluate_institution_name_similarity(declared_name: str, candidate_text: str) -> tuple[float, bool]:
     """
-    Compares declared institution name against candidate text using token-sort ratio.
+    Compares declared institution name against candidate text.
+    Handles abbreviations (e.g. Govt. vs Government) and line-level certificate text.
     Returns (similarity_score_pct, is_acceptable_match).
     Threshold: >= 75.0% is acceptable; < 75.0% flags discrepancy.
     """
     if not candidate_text or not declared_name:
         return 100.0, True
 
-    score = fuzz.token_sort_ratio(declared_name.lower(), candidate_text.lower())
-    is_acceptable = score >= 75.0
-    return float(score), is_acceptable
+    norm_declared = _normalize_institution_name(declared_name)
+    if not norm_declared:
+        return 100.0, True
+
+    best_score = 0.0
+    for raw_line in candidate_text.splitlines():
+        line = raw_line.strip()
+        if len(line) < 5:
+            continue
+        norm_line = _normalize_institution_name(line)
+        if not norm_line:
+            continue
+        ts_score = float(fuzz.token_set_ratio(norm_declared, norm_line))
+        p_score = float(fuzz.partial_ratio(norm_declared, norm_line))
+        best_score = max(best_score, ts_score, p_score)
+
+    norm_candidate = _normalize_institution_name(candidate_text[:1000])
+    if norm_candidate:
+        block_score = float(fuzz.partial_ratio(norm_declared, norm_candidate))
+        best_score = max(best_score, block_score)
+
+    is_acceptable = best_score >= 75.0
+    return float(best_score), is_acceptable
 
 def compare_perceptual_hashes(hash1: str, hash2: str) -> int:
     """Returns Hamming distance between two hex perceptual hashes."""

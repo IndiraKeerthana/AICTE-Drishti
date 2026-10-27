@@ -1,5 +1,7 @@
 import time
 import datetime
+import json
+import re
 from sqlalchemy.orm import Session
 from app.models import (
     Application, Document, Finding, BaselineRecord, ScrutinyRun,
@@ -351,15 +353,35 @@ def execute_automated_scrutiny(
         _resolve_finding_if_exists(db, app.id, "FND-PHASH")
 
     # --- CHECK 6: QR Code Extraction & Issuing Authority Lookup ---
+    authority_categories = ("FIRE_SAFETY_NOC", "AFFILIATION_LETTER", "BUILDING_PLAN", "LAYOUT_APPROVAL", "ENVIRONMENTAL_CLEARANCE", "LAND_TITLE_DEED")
     for doc in active_docs:
-        if doc.document_category in ("FIRE_SAFETY_NOC", "AFFILIATION_LETTER"):
-            # Attempt QR decode
+        if doc.document_category in authority_categories:
+            # 1. Attempt QR decode
             qr_text, qr_notes = decode_qr_code_from_image(doc.storage_path)
-            # Find certificate number
-            cert_num = next((ef.normalized_value for ef in doc.extracted_fields if ef.field_key == "certificate_number"), None)
-            auth_res = verify_against_authority_registry(cert_reference=cert_num, cert_type=doc.document_category, qr_payload=qr_text)
 
-            # Record in authority verifications table
+            # 2. Extract certificate or approval reference number
+            cert_num = next((ef.normalized_value for ef in doc.extracted_fields if ef.field_key in ("certificate_number", "approval_ref")), None)
+            if not cert_num and doc.extracted_text:
+                import re
+                ref_match = re.search(r"\b((?:FS|BP|UNIV|ENV|AFFIL|NOC|DEED)-[A-Za-z0-9\-]{4,25})\b", doc.extracted_text, re.IGNORECASE)
+                if ref_match:
+                    cert_num = ref_match.group(1).upper()
+                else:
+                    # Also look for generic "Certificate No: XXX" or "Ref No: XXX"
+                    generic_match = re.search(r"(?:certificate\s*no|ref\s*no|plan\s*no|approval\s*no)[\s.:]*([A-Za-z0-9\/-]{5,25})", doc.extracted_text, re.IGNORECASE)
+                    if generic_match:
+                        cert_num = generic_match.group(1).strip()
+
+            campus_location = f"{app.institution.address}, {app.institution.district}, {app.institution.state}"
+            auth_res = verify_against_authority_registry(
+                cert_reference=cert_num,
+                cert_type=doc.document_category,
+                institution_name=app.institution.name,
+                declared_location=campus_location,
+                qr_payload=qr_text
+            )
+
+            # 3. Record in authority_verifications table
             verif_entry = AuthorityVerification(
                 document_id=doc.id,
                 application_id=app.id,
@@ -367,54 +389,79 @@ def execute_automated_scrutiny(
                 source_name=auth_res["source_name"],
                 source_reference=auth_res.get("source_reference", cert_num),
                 status=auth_res["status"],
-                evidence_payload=auth_res["explanation"],
+                evidence_payload=json.dumps(auth_res),
                 is_simulated=True
             )
             db.add(verif_entry)
 
+            # 4. Record Scrutiny CheckResult
             record_check(
                 code=f"AUTH-VERIF-{doc.document_category}",
                 category="AUTHORITY",
                 status=auth_res["status"],
-                exp="Authentic record confirmed in registry",
-                obs=f"Status: {auth_res['status']} via {auth_res['source_name']}",
+                exp=auth_res.get("expected_value") or "Authentic record confirmed in registry",
+                obs=f"{auth_res['outcome']}: {auth_res['source_name']}",
                 explanation=auth_res["explanation"],
-                sev="MEDIUM",
+                sev="CRITICAL" if auth_res["outcome"] in ("STATUS_INVALID", "EXPIRED") else "HIGH",
                 human_rev=auth_res["requires_human_review"]
             )
 
-            # Official-source verification alerts
-            if auth_res["status"] in ("SOURCE_UNAVAILABLE", "WAITING_VERIFICATION"):
-                _create_or_update_alert(
+            # 5. Handle Findings and Alerts based on granular outcome
+            finding_code = f"FND-AUTH-{doc.document_category}-{doc.id}"
+            if auth_res["outcome"] != "VERIFIED":
+                fnd_title = f"Authority Verification: {auth_res['outcome'].replace('_', ' ').title()} — {doc.document_category.replace('_', ' ').title()}"
+                if auth_res["outcome"] == "RECORD_NOT_FOUND":
+                    fnd_title = f"Approval Record Not Found — {doc.document_category.replace('_', ' ').title()}"
+                elif auth_res["outcome"] == "LOCATION_MISMATCH":
+                    fnd_title = f"Approved Location Mismatch — {doc.document_category.replace('_', ' ').title()}"
+                elif auth_res["outcome"] == "ENTITY_MISMATCH":
+                    fnd_title = f"Institution Entity Mismatch — {doc.document_category.replace('_', ' ').title()}"
+                elif auth_res["outcome"] == "EXPIRED":
+                    fnd_title = f"Expired Statutory Clearance — {doc.document_category.replace('_', ' ').title()}"
+                elif auth_res["outcome"] == "STATUS_INVALID":
+                    fnd_title = f"Revoked / Invalid Statutory Approval — {doc.document_category.replace('_', ' ').title()}"
+                elif auth_res["outcome"] == "AUTHORITY_UNAVAILABLE":
+                    fnd_title = f"External Verification Gateway Unavailable — {doc.document_category.replace('_', ' ').title()}"
+
+                fnd = _upsert_finding(
                     db=db,
                     app_id=app.id,
-                    alert_type="AUTHORITY_PENDING",
-                    severity="Waiting for verification",
-                    title="Official-Source Verification Pending or Unavailable",
-                    message=f"{auth_res['source_name']} verification is pending or unreachable for {doc.document_category}. Needs follow-up.",
-                    scrutiny_run_id=scrutiny_run.id
+                    run_id=scrutiny_run.id,
+                    code=finding_code,
+                    category="RECORD_MISMATCH" if auth_res["outcome"] in ("LOCATION_MISMATCH", "ENTITY_MISMATCH", "RECORD_NOT_FOUND", "EXTRACTION_INCOMPLETE", "AUTHORITY_UNAVAILABLE") else ("EXPIRED_DOCUMENT" if auth_res["outcome"] == "EXPIRED" else "INTEGRITY_ANOMALY"),
+                    severity="CRITICAL" if auth_res["outcome"] in ("STATUS_INVALID", "EXPIRED") else "HIGH",
+                    title=fnd_title,
+                    desc=auth_res["explanation"],
+                    exp=auth_res.get("expected_value") or "Authentic record confirmed in registry",
+                    obs=auth_res.get("observed_value") or auth_res["specific_reason"],
+                    rule_code=f"APH-AUTH-VERIF-{doc.document_category}",
+                    rule_desc="Statutory clearance certificates must be confirmed in issuing authority registries without location or entity discrepancies.",
+                    rec_action=auth_res.get("recommended_action") or "Review document in in-app viewer and request clarification.",
+                    doc_id=doc.id,
+                    page_num=1,
+                    evidence_class="CHECK_NOT_COMPLETED" if auth_res["outcome"] in ("EXTRACTION_INCOMPLETE", "AUTHORITY_UNAVAILABLE") else ("VERIFIED_FACT" if auth_res["outcome"] in ("EXPIRED", "LOCATION_MISMATCH", "ENTITY_MISMATCH") else "AUTOMATED_INFERENCE")
                 )
-            elif auth_res["status"] in ("MANUAL_REVIEW", "MISMATCH_FOUND"):
+
                 _create_or_update_alert(
                     db=db,
                     app_id=app.id,
                     alert_type="AUTHORITY_REVIEW",
-                    severity="Review required",
-                    title="Official Source Verification Requires Manual Review",
-                    message=f"{auth_res['source_name']} verification for {doc.document_category} flagged: {auth_res['explanation']}",
+                    severity="Action required" if auth_res["outcome"] in ("STATUS_INVALID", "EXPIRED") else "Review required",
+                    title=fnd_title,
+                    message=auth_res["explanation"],
+                    finding_id=fnd.id,
                     scrutiny_run_id=scrutiny_run.id
                 )
-            elif auth_res["status"] == "VERIFIED":
-                _resolve_finding_if_exists(db, app.id, f"AUTH-VERIF-{doc.document_category}", alert_type="AUTHORITY_PENDING")
-                _resolve_finding_if_exists(db, app.id, f"AUTH-VERIF-{doc.document_category}", alert_type="AUTHORITY_REVIEW")
+            else:
+                _resolve_finding_if_exists(db, app.id, finding_code, alert_type="AUTHORITY_REVIEW")
 
     # --- CHECK 7: Fuzzy Institution Name Consistency ---
     for doc in active_docs:
-        if doc.extracted_text and len(doc.extracted_text) > 50:
-            score, acceptable = evaluate_institution_name_similarity(app.institution.name, doc.extracted_text[:300])
-            if not acceptable and score < 60:
+        if doc.extracted_text and len(doc.extracted_text) > 20:
+            score, acceptable = evaluate_institution_name_similarity(app.institution.name, doc.extracted_text)
+            if not acceptable:
                 record_check(
-                    code="APH-2026-NAME-06",
+                    code=f"APH-2026-NAME-{doc.id}",
                     category="COMPLIANCE",
                     status="MANUAL_REVIEW",
                     exp=app.institution.name,
@@ -423,6 +470,96 @@ def execute_automated_scrutiny(
                     sev="MEDIUM",
                     human_rev=True
                 )
+                fnd = _upsert_finding(
+                    db=db,
+                    app_id=app.id,
+                    run_id=scrutiny_run.id,
+                    code=f"FND-NAME-{doc.id}",
+                    category="RECORD_MISMATCH",
+                    severity="MEDIUM",
+                    title="Institution Name Discrepancy in Submitted Attachment",
+                    desc=f"In '{doc.original_filename}', the referenced institution name deviated from registered name '{app.institution.name}' (similarity: {score:.1f}%).",
+                    exp=f"Registered name: {app.institution.name}",
+                    obs=f"Observed similarity: {score:.1f}%",
+                    rule_code="APH-2026-NAME-06",
+                    rule_desc="Institution name in statutory documents must match institutional registry title or acceptable abbreviation.",
+                    rec_action="Confirm institutional identity or request an explanatory corrigendum.",
+                    doc_id=doc.id,
+                    evidence_class="AUTOMATED_INFERENCE"
+                )
+                _create_or_update_alert(
+                    db=db,
+                    app_id=app.id,
+                    alert_type="NAME_MISMATCH",
+                    severity="Review required",
+                    title="Institution Name Discrepancy",
+                    message=f"Name deviation detected in {doc.original_filename} ({score:.1f}% match).",
+                    finding_id=fnd.id,
+                    scrutiny_run_id=scrutiny_run.id
+                )
+            else:
+                record_check(
+                    code=f"APH-2026-NAME-{doc.id}",
+                    category="COMPLIANCE",
+                    status="PASSED",
+                    exp=app.institution.name,
+                    obs=f"Match Score: {score:.1f}% (Acceptable variation)",
+                    explanation=f"Institution name in '{doc.original_filename}' matches registered institution name within acceptable variation."
+                )
+                _resolve_finding_if_exists(db, app.id, f"FND-NAME-{doc.id}", alert_type="NAME_MISMATCH")
+
+    # --- CHECK 8: PDF Incremental Modification / Tampering Anomaly ---
+    for doc in active_docs:
+        if doc.mime_type == "application/pdf" or (doc.original_filename and doc.original_filename.lower().endswith(".pdf")):
+            inc_count = doc.incremental_updates_count or 0
+            if inc_count > 1:
+                record_check(
+                    code=f"APH-INTEGRITY-PDF-MOD-{doc.id}",
+                    category="ANOMALY",
+                    status="MANUAL_REVIEW",
+                    exp="Single-pass unaltered PDF structure (incremental updates <= 1)",
+                    obs=f"Detected {inc_count} incremental update revisions (multiple %%EOF trailers)",
+                    explanation=f"Attachment '{doc.original_filename}' contains {inc_count} post-issuance incremental modification blocks, indicating potential post-creation revision or alteration.",
+                    sev="HIGH",
+                    human_rev=True
+                )
+                fnd = _upsert_finding(
+                    db=db,
+                    app_id=app.id,
+                    run_id=scrutiny_run.id,
+                    code=f"FND-PDF-MOD-{doc.id}",
+                    category="INTEGRITY_ANOMALY",
+                    severity="HIGH",
+                    title="Potential Post-Issuance PDF Modification Detected",
+                    desc=f"Document '{doc.original_filename}' exhibits {inc_count} appended revision blocks (%%EOF markers) typically produced by post-export editing or redaction tools.",
+                    exp="Single-pass unaltered PDF structure",
+                    obs=f"{inc_count} incremental update revision(s)",
+                    rule_code="APH-INTEGRITY-PDF-MOD-03",
+                    rule_desc="Statutory certificates and NOCs should reflect authentic, single-pass exports without secondary appended byte revisions.",
+                    rec_action="Cross-check physical certificate with issuing authority or request certified original digital copy.",
+                    doc_id=doc.id,
+                    evidence_class="POTENTIAL_ANOMALY"
+                )
+                _create_or_update_alert(
+                    db=db,
+                    app_id=app.id,
+                    alert_type="ANOMALY_DETECTED",
+                    severity="Review required",
+                    title="Document Modification Anomaly Detected",
+                    message=f"Post-creation byte revisions detected in {doc.original_filename} ({inc_count} incremental updates).",
+                    finding_id=fnd.id,
+                    scrutiny_run_id=scrutiny_run.id
+                )
+            else:
+                record_check(
+                    code=f"APH-INTEGRITY-PDF-MOD-{doc.id}",
+                    category="ANOMALY",
+                    status="PASSED",
+                    exp="Single-pass authentic PDF structure",
+                    obs="Clean PDF structure (single %%EOF trailer)",
+                    explanation=f"Document '{doc.original_filename}' verified as standard single-pass structure with no suspicious appended updates."
+                )
+                _resolve_finding_if_exists(db, app.id, f"FND-PDF-MOD-{doc.id}", alert_type="ANOMALY_DETECTED")
 
     # Finalize Scrutiny Run metrics
     duration_ms = int((time.time() - start_time) * 1000)
@@ -490,7 +627,8 @@ def _upsert_finding(
     rule_desc: str,
     rec_action: str,
     doc_id: int = None,
-    evidence_class: str = "VERIFIED_FACT"
+    evidence_class: str = "VERIFIED_FACT",
+    page_num: int = None
 ) -> Finding:
     existing = db.query(Finding).filter(Finding.finding_code == code, Finding.application_id == app_id).first()
     if existing:
@@ -498,6 +636,10 @@ def _upsert_finding(
         existing.description = desc
         existing.expected_value = exp
         existing.observed_value = obs
+        if doc_id:
+            existing.supporting_document_id = doc_id
+        if page_num:
+            existing.supporting_page_number = page_num
         existing.updated_at = datetime.datetime.now(datetime.timezone.utc)
         return existing
     else:
@@ -513,6 +655,7 @@ def _upsert_finding(
             expected_value=exp,
             observed_value=obs,
             supporting_document_id=doc_id,
+            supporting_page_number=page_num,
             rule_code=rule_code,
             rule_description=rule_desc,
             recommended_action=rec_action,
