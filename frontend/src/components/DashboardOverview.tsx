@@ -1,14 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import {
   FileText,
-  AlertTriangle,
   Clock,
   CheckCircle2,
   Search,
   ArrowRight,
-  Building2,
   FileCheck2,
-  UserCheck
+  UserCheck,
+  AlertCircle
 } from 'lucide-react';
 import { Application, AlertItem } from '../types';
 
@@ -22,32 +21,13 @@ interface DashboardOverviewProps {
   isReadyForApprovalView?: boolean;
 }
 
-export function getSeverityBadge(severity: string): { label: string; badgeClass: string } {
-  const norm = severity?.toLowerCase() || '';
-  if (norm.includes('action') || norm.includes('critical') || norm.includes('high')) {
-    return {
-      label: 'Action required',
-      badgeClass: 'bg-red-50 text-red-700 border border-red-200'
-    };
-  }
-  if (norm.includes('waiting') || norm.includes('pending') || norm.includes('unavailable')) {
-    return {
-      label: 'Waiting for verification',
-      badgeClass: 'bg-indigo-50 text-indigo-700 border border-indigo-200'
-    };
-  }
-  return {
-    label: 'Review required',
-    badgeClass: 'bg-amber-50 text-amber-800 border border-amber-200'
-  };
-}
-
 export type PlainStatusLabel =
-  | 'Newly submitted'
-  | 'Under review'
-  | 'Needs resubmission'
-  | 'Further review required'
-  | 'Ready for approval'
+  | 'Just submitted'
+  | 'Being reviewed'
+  | 'Waiting for documents'
+  | 'Checks in progress'
+  | 'Further review needed'
+  | 'Ready for your decision'
   | 'Decision recorded';
 
 export function getPlainStatus(
@@ -66,48 +46,66 @@ export function getPlainStatus(
   }
   if (status === 'READY_FOR_REVIEW') {
     return {
-      label: 'Ready for approval',
+      label: 'Ready for your decision',
       badgeClass: 'bg-blue-50 text-blue-800 border border-blue-200'
     };
   }
   if (status === 'DEFICIENCY_FLAGGED' || status === 'CORRECTIONS_REQUIRED' || status === 'NEEDS_RESUBMISSION') {
     return {
-      label: 'Needs resubmission',
+      label: 'Waiting for documents',
       badgeClass: 'bg-amber-50 text-amber-800 border border-amber-200'
     };
   }
-  if (status === 'UNDER_SCRUTINY' || status === 'CHECKING_DOCUMENTS') {
+  if (status === 'CHECKING_DOCUMENTS') {
+    return {
+      label: 'Checks in progress',
+      badgeClass: 'bg-purple-50 text-purple-800 border border-purple-200'
+    };
+  }
+  if (status === 'UNDER_SCRUTINY') {
     if (findingsCount > 0) {
       return {
-        label: 'Further review required',
+        label: 'Further review needed',
         badgeClass: 'bg-indigo-50 text-indigo-800 border border-indigo-200'
       };
     }
     return {
-      label: 'Under review',
+      label: 'Being reviewed',
       badgeClass: 'bg-sky-50 text-sky-800 border border-sky-200'
     };
   }
   return {
-    label: 'Newly submitted',
+    label: 'Just submitted',
     badgeClass: 'bg-slate-100 text-slate-700 border border-slate-200'
   };
 }
 
-export function getRequiredNextAction(status: string, findingsCount: number, finalDecision?: string | null): string {
-  if (finalDecision || status === 'APPROVED' || status === 'REJECTED') {
-    return 'Decision recorded';
-  }
-  if (status === 'DEFICIENCY_FLAGGED' || status === 'CORRECTIONS_REQUIRED') {
-    return 'Awaiting institution resubmission';
+export function getRequiredNextAction(
+  status: string,
+  findingsCount: number = 0,
+  finalDecision?: string | null
+): string {
+  if (finalDecision || status === 'APPROVED' || status === 'REJECTED' || status === 'DECISION_RECORDED') {
+    return 'No further action currently required';
   }
   if (status === 'READY_FOR_REVIEW') {
-    return 'Record statutory decision';
+    return 'Open application and record your decision';
   }
-  if (status === 'UNDER_SCRUTINY' || status === 'CHECKING_DOCUMENTS') {
-    return findingsCount > 0 ? 'Review preliminary findings' : 'Review scrutiny report';
+  if (status === 'DEFICIENCY_FLAGGED' || status === 'CORRECTIONS_REQUIRED' || status === 'NEEDS_RESUBMISSION') {
+    return "Await the applicant's missing documents";
   }
-  return 'Initiate scrutiny review';
+  if (status === 'CHECKING_DOCUMENTS') {
+    return 'Complete the outstanding checks';
+  }
+  if (status === 'UNDER_SCRUTINY') {
+    return findingsCount > 0
+      ? 'Review the identified discrepancy'
+      : 'Continue reviewing the submitted documents';
+  }
+  if (status === 'SUBMITTED') {
+    return 'Begin application scrutiny';
+  }
+  return 'Review application details';
 }
 
 export function getCategoryTitle(code: string): string {
@@ -123,32 +121,9 @@ export function getCategoryTitle(code: string): string {
   }
 }
 
-export function formatAlertTitle(title: string): string {
-  if (!title) return 'Compliance Alert';
-  let t = title;
-  t = t.replace(/DETECTOR-PHASH(-\d+)?/gi, 'Infrastructure photograph similarity check');
-  t = t.replace(/APH-INTEGRITY-PDF-MOD(-\d+)?/gi, 'Document modification indicator');
-  t = t.replace(/APH-2026-INTAKE(-\d+)?/gi, 'Sanctioned intake comparison');
-  t = t.replace(/APH-2026-NAME(-\d+)?/gi, 'Institution title consistency');
-  return t;
-}
-
-export function formatAlertMessage(msg: string): string {
-  if (!msg) return '';
-  let m = msg;
-  m = m.replace(/DETECTOR-PHASH(-\d+)?/gi, 'Infrastructure photograph similarity check ($&)');
-  m = m.replace(/APH-INTEGRITY-PDF-MOD(-\d+)?/gi, 'Document modification indicator ($&)');
-  m = m.replace(/APH-2026-INTAKE(-\d+)?/gi, 'Sanctioned intake comparison ($&)');
-  m = m.replace(/APH-2026-NAME(-\d+)?/gi, 'Institution title check ($&)');
-  return m;
-}
-
 export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   applications,
-  alerts = [],
   onSelectApplication,
-  onAcknowledgeAlert,
-  onNavigateToApplications,
   isQueueView = false,
   isReadyForApprovalView = false,
 }) => {
@@ -156,15 +131,15 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
 
-  // The 4 Useful Operational Counts derived from actual backend data:
-  const newApplicationsCount = applications.filter(a => a.status === 'SUBMITTED').length;
-  const applicationsUnderReviewCount = applications.filter(
+  // Operational Workload Counts
+  const justSubmittedCount = applications.filter(a => a.status === 'SUBMITTED').length;
+  const beingReviewedCount = applications.filter(
     a => a.status === 'UNDER_SCRUTINY' || a.status === 'CHECKING_DOCUMENTS'
   ).length;
-  const applicationsRequiringCorrectionsCount = applications.filter(
-    a => a.status === 'DEFICIENCY_FLAGGED' || a.status === 'CORRECTIONS_REQUIRED'
+  const waitingForDocsCount = applications.filter(
+    a => a.status === 'DEFICIENCY_FLAGGED' || a.status === 'CORRECTIONS_REQUIRED' || a.status === 'NEEDS_RESUBMISSION'
   ).length;
-  const applicationsReadyForApprovalCount = applications.filter(
+  const readyForDecisionCount = applications.filter(
     a => !a.final_decision && a.status !== 'APPROVED' && a.status !== 'REJECTED' &&
          (a.status === 'READY_FOR_REVIEW' || (a.status === 'UNDER_SCRUTINY' && a.findings_count === 0))
   ).length;
@@ -180,7 +155,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
     return applications;
   }, [applications, isReadyForApprovalView]);
 
-  // Filtered and CHRONOLOGICALLY SORTED applications table (Oldest submission first)
+  // Filtered and CHRONOLOGICALLY SORTED applications table (Oldest submission first / FIFO)
   const filteredApplications = useMemo(() => {
     return baseApplications
       .filter((app) => {
@@ -210,27 +185,6 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
     setSelectedStatus('ALL');
   };
 
-  const urgencyWeight = (sev: string) => {
-    const s = sev?.toLowerCase() || '';
-    if (s.includes('action') || s.includes('critical')) return 1;
-    if (s.includes('review') || s.includes('high')) return 2;
-    if (s.includes('waiting') || s.includes('pending')) return 3;
-    return 4;
-  };
-
-  const attentionAlerts = useMemo(() => {
-    if (!alerts) return [];
-    return alerts
-      .filter((a) => a.status === 'ACTIVE' || a.status === 'ACKNOWLEDGED')
-      .sort((a, b) => {
-        const diff = urgencyWeight(a.severity) - urgencyWeight(b.severity);
-        if (diff !== 0) return diff;
-        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-      });
-  }, [alerts]);
-
-  const displayedAlerts = useMemo(() => attentionAlerts.slice(0, 5), [attentionAlerts]);
-
   return (
     <div className="space-y-6">
       {/* Officer Welcome & Summary Banner (Dashboard only) */}
@@ -256,16 +210,16 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
         </div>
       )}
 
-      {/* 4 Action-Oriented Operational Indicators (Shown on Dashboard only) */}
+      {/* 4 Calm, Data-Driven Workload Summary Cards (Shown on Dashboard only) */}
       {!isQueueView && !isReadyForApprovalView && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* 1. Newly submitted */}
+          {/* 1. Just submitted */}
           <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
             <div>
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                Newly submitted
+                Just submitted
               </p>
-              <p className="text-2xl font-bold text-slate-800 mt-1">{newApplicationsCount}</p>
+              <p className="text-2xl font-bold text-slate-800 mt-1">{justSubmittedCount}</p>
               <p className="text-[11px] text-slate-400 mt-0.5">Awaiting scrutiny initiation</p>
             </div>
             <div className="w-11 h-11 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center">
@@ -273,13 +227,13 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
             </div>
           </div>
 
-          {/* 2. Under review */}
+          {/* 2. Being reviewed */}
           <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
             <div>
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                Under review
+                Being reviewed
               </p>
-              <p className="text-2xl font-bold text-blue-700 mt-1">{applicationsUnderReviewCount}</p>
+              <p className="text-2xl font-bold text-blue-700 mt-1">{beingReviewedCount}</p>
               <p className="text-[11px] text-blue-600/80 mt-0.5">Scrutiny checks in progress</p>
             </div>
             <div className="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
@@ -287,27 +241,27 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
             </div>
           </div>
 
-          {/* 3. Needs resubmission */}
+          {/* 3. Waiting for documents */}
           <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
             <div>
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                Needs resubmission
+                Waiting for documents
               </p>
-              <p className="text-2xl font-bold text-amber-700 mt-1">{applicationsRequiringCorrectionsCount}</p>
-              <p className="text-[11px] text-amber-600 mt-0.5">Deficiency notice issued</p>
+              <p className="text-2xl font-bold text-amber-700 mt-1">{waitingForDocsCount}</p>
+              <p className="text-[11px] text-amber-600 mt-0.5">Awaiting applicant resubmission</p>
             </div>
             <div className="w-11 h-11 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
-              <AlertTriangle className="w-5 h-5" />
+              <AlertCircle className="w-5 h-5" />
             </div>
           </div>
 
-          {/* 4. Ready for approval */}
+          {/* 4. Ready for your decision */}
           <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
             <div>
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                Ready for approval
+                Ready for your decision
               </p>
-              <p className="text-2xl font-bold text-emerald-700 mt-1">{applicationsReadyForApprovalCount}</p>
+              <p className="text-2xl font-bold text-emerald-700 mt-1">{readyForDecisionCount}</p>
               <p className="text-[11px] text-emerald-600 mt-0.5">All checks complete &bull; Awaiting decision</p>
             </div>
             <div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
@@ -317,135 +271,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
         </div>
       )}
 
-      {/* Compact "Needs Your Attention" Section (Shown on Dashboard only) */}
-      {!isQueueView && !isReadyForApprovalView && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="p-4 border-b border-slate-200 bg-slate-50/50 flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <div className="w-7 h-7 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center">
-                <AlertTriangle className="w-4 h-4" />
-              </div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-sm font-bold text-slate-800">Items Needing Attention</h2>
-                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
-                  {attentionAlerts.length}
-                </span>
-              </div>
-            </div>
-            <span className="text-xs text-slate-500 font-normal">
-              Chronological order &bull; Oldest active alert first
-            </span>
-          </div>
-
-          {attentionAlerts.length === 0 ? (
-            <div className="p-6 text-center">
-              <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 mx-auto flex items-center justify-center mb-2">
-                <CheckCircle2 className="w-5 h-5" />
-              </div>
-              <p className="text-sm font-bold text-slate-800">No applications currently need urgent attention.</p>
-              <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
-                All submitted applications are either proceeding through scrutiny checks or have their decisions recorded.
-              </p>
-            </div>
-          ) : (
-            <div className="divide-y divide-slate-100">
-              {displayedAlerts.map((alert) => {
-                const sev = getSeverityBadge(alert.severity);
-                const matchingApp = applications.find((a) => a.id === alert.application_id);
-                const instName = alert.institution_name || matchingApp?.institution.name || 'Technical Institution';
-                const appRef = alert.application_reference || matchingApp?.application_number || `APP-${alert.application_id}`;
-                const appStatus = getPlainStatus(
-                  alert.application_status || matchingApp?.status || '',
-                  matchingApp?.final_decision,
-                  matchingApp?.findings_count
-                ).label;
-                const formattedDate = alert.created_at
-                  ? new Date(alert.created_at).toLocaleDateString('en-IN', {
-                      month: 'short',
-                      day: 'numeric',
-                      year: 'numeric'
-                    })
-                  : 'Recently';
-
-                return (
-                  <div
-                    key={alert.id}
-                    className="p-4 hover:bg-slate-50/60 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs"
-                  >
-                    <div className="space-y-1.5 flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${sev.badgeClass}`}>
-                          {sev.label}
-                        </span>
-                        <span className="font-bold text-slate-900 truncate">
-                          {instName}
-                        </span>
-                        <span className="text-slate-400">&bull;</span>
-                        <span className="font-mono text-slate-600 font-semibold">
-                          {appRef}
-                        </span>
-                        <span className="text-slate-400">&bull;</span>
-                        <span className="text-[11px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
-                          {appStatus}
-                        </span>
-                        {alert.status === 'ACKNOWLEDGED' && (
-                          <span className="text-[10px] text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 font-medium">
-                            Seen by officer
-                          </span>
-                        )}
-                        <span className="text-slate-400 text-[11px] ml-auto md:ml-0">
-                          {formattedDate}
-                        </span>
-                      </div>
-
-                      <p className="text-slate-700 text-xs leading-relaxed">
-                        <strong className="text-slate-900">{formatAlertTitle(alert.title)}: </strong>
-                        <span>{formatAlertMessage(alert.message)}</span>
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
-                      {alert.status === 'ACTIVE' && onAcknowledgeAlert && (
-                        <button
-                          type="button"
-                          onClick={() => onAcknowledgeAlert(alert.id)}
-                          className="px-2.5 py-1.5 rounded text-[11px] font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
-                          title="Mark this alert as seen"
-                        >
-                          Mark as seen
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => onSelectApplication(alert.application_id, alert.finding_id || undefined)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs transition-colors"
-                      >
-                        <span>Open Application</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-
-              {attentionAlerts.length > 5 && (
-                <div className="p-3 bg-slate-50/50 text-center border-t border-slate-100">
-                  <button
-                    type="button"
-                    onClick={onNavigateToApplications}
-                    className="text-xs font-semibold text-blue-600 hover:text-blue-800 inline-flex items-center gap-1"
-                  >
-                    <span>Showing 5 of {attentionAlerts.length} items. View all in Applications Queue</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Applications Table (Chronological: Oldest First) */}
+      {/* Main Applications Queue Table (Chronological: Oldest First) */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         {/* Table Header & Controls */}
         <div className="p-4 border-b border-slate-200 bg-slate-50/50 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
@@ -500,7 +326,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
               </select>
             </div>
 
-            {/* Understandable Status Filter (Hidden if already in Ready for Approval queue) */}
+            {/* Understandable Status Filter */}
             {!isReadyForApprovalView && (
               <div className="flex items-center space-x-1 text-xs">
                 <select
@@ -509,11 +335,12 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                   className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-700 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                 >
                   <option value="ALL">All Statuses</option>
-                  <option value="Newly submitted">Newly submitted</option>
-                  <option value="Under review">Under review</option>
-                  <option value="Needs resubmission">Needs resubmission</option>
-                  <option value="Further review required">Further review required</option>
-                  <option value="Ready for approval">Ready for approval</option>
+                  <option value="Just submitted">Just submitted</option>
+                  <option value="Being reviewed">Being reviewed</option>
+                  <option value="Waiting for documents">Waiting for documents</option>
+                  <option value="Checks in progress">Checks in progress</option>
+                  <option value="Further review needed">Further review needed</option>
+                  <option value="Ready for your decision">Ready for your decision</option>
                   <option value="Decision recorded">Decision recorded</option>
                 </select>
               </div>
@@ -533,7 +360,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           </div>
         </div>
 
-        {/* Ready for Approval helper banner */}
+        {/* Ready for Approval queue explanation banner */}
         {isReadyForApprovalView && (
           <div className="px-4 py-2.5 bg-emerald-50/70 border-b border-emerald-100 text-xs text-emerald-900 flex items-center justify-between">
             <div className="flex items-center space-x-2">
@@ -548,15 +375,15 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           </div>
         )}
 
-        {/* Chronological Table (Oldest First, No Priority Column) */}
+        {/* Main Application Queue Table (Oldest First, No Priority Column) */}
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
               <tr>
-                <th className="py-3 px-4">Application / Reference No.</th>
+                <th className="py-3 px-4">Application Reference</th>
                 <th className="py-3 px-4">Institution Name</th>
-                <th className="py-3 px-4">Approval Category</th>
-                <th className="py-3 px-4">Submission Date</th>
+                <th className="py-3 px-4">Application Type</th>
+                <th className="py-3 px-4">Submitted on</th>
                 <th className="py-3 px-4">Current Status</th>
                 <th className="py-3 px-4">Next Action</th>
                 <th className="py-3 px-4 text-right">Action</th>
@@ -602,7 +429,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                         <div className="flex items-center space-x-1.5">
                           <span>{app.application_number}</span>
                           {index === 0 && !hasActiveFilters && (
-                            <span className="text-[10px] bg-slate-100 text-slate-600 font-sans px-1.5 py-0.2 rounded border border-slate-200">
+                            <span className="text-[10px] bg-slate-100 text-slate-600 font-sans px-1.5 py-0.5 rounded border border-slate-200">
                               Earliest
                             </span>
                           )}

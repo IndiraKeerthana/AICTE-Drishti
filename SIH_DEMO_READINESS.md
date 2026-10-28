@@ -65,8 +65,8 @@ Rather than collapsing results into a generic "Not Verified" state, the system d
 | `backend/scripts/verify_end_to_end_demo.py` | Created | 10-step automated verification script validating the end-to-end scrutiny and decision lifecycle. |
 | `frontend/src/components/Sidebar.tsx` | Modified | Updated navigation to 5 primary items with *Ready for Approval* as item 3; session card displays "AICTE Official". |
 | `frontend/src/components/Header.tsx` | Modified | Removed role-switcher dropdown and demo identities; displayed static "AICTE Official" session badge. |
-| `frontend/src/components/DashboardOverview.tsx` | Rewritten | Implemented strict FIFO oldest-first queue sort; removed priority column and badges; added support for *Ready for Approval* queue view; added readable status helpers. |
-| `frontend/src/components/ApplicationDetails.tsx` | Rewritten | Removed Sections A–F literal headers; removed Section F audit timeline UI; implemented Areas A–E with process gating, in-app viewer button, and `SIMULATED EXTERNAL CHECK — SYNTHETIC DATA` disclosure. |
+| `frontend/src/components/DashboardOverview.tsx` | Rewritten | Removed "Needs Your Attention" panel and emergency widgets; implemented clean 4-count workload overview; implemented clear natural-language Current Status labels and separate Next Action column; FIFO oldest-first queue sort. |
+| `frontend/src/components/ApplicationDetails.tsx` | Rewritten | Removed Sections A–F literal headers; removed Section F audit timeline UI; implemented Areas A–E with refined "Checks That Need Attention" (focused strictly on submitted requirements needing confirmation/review, with direct in-app viewer actions and responsible parties), and `SIMULATED EXTERNAL CHECK — SYNTHETIC DATA` disclosure. |
 | `frontend/src/components/DocumentViewerModal.tsx` | Created | In-app modal viewer supporting PDF streaming (`#page=N`), zoomable images, and extracted text drawer. |
 | `frontend/src/App.tsx` | Modified | Handled `ready_for_approval` view; wired single officer session; maintained persistent prototype banner and governance footer. |
 
@@ -218,6 +218,24 @@ dist/assets/index-C396Ytru.js   326.08 kB │ gzip: 82.06 kB
   2. The officer reviews evidence, enters mandatory justification remarks, and records the final statutory decision (*Recommend Approval* or *Recommend Rejection*).
   3. The decision is persisted in `reviewer_actions`, the application status updates to *Decision recorded*, and the application is dynamically removed from the *Ready for Approval* queue.
 
+### Scenario J: Findings and Supporting Evidence (Area D Redesign)
+- **Observed Behavior:**
+  1. Replaced crowded, technical 5-column grid with clean, concise, officer-friendly cards categorized into 5 distinct groups:
+     - **Missing Mandatory Documents** (Status: *Documents missing*)
+     - **Discrepancies & Baseline Differences** (Status: *Difference found*)
+     - **Submitted Requirements Awaiting Verification or Approval** (Status: *Awaiting verification* or *Validity expired*)
+     - **Potential Document Integrity Issues** (Status: *Further review required*)
+     - **Incomplete Checks & Gateway Limitations** (Status: *Check incomplete*)
+  2. Each card is structured around the officer's three core questions:
+     - **What was found**: Clear, plain-language description
+     - **Why does it matter**: Regulatory relevance and statutory rationale
+     - **What should happen next**: Concrete next action for the officer
+  3. Simple 2-column comparison (*Expected standard* vs *Observed in submission*) displayed only when relevant and available.
+  4. Supporting documents open in the in-app document viewer via a dedicated **View evidence** button.
+  5. Expandable **Technical details** drawer hides verification source, standard classification, and raw text snippets by default to keep cards concise.
+  6. Replaced generic *Take Action* button with context-specific actions: **Review finding**, **Request clarification**, and **View evidence**.
+  7. Production build (`npm run build`) and full backend pytest suite (27/27) pass with zero errors.
+
 ---
 
 ## 8. Known Limitations & Prototype Boundaries
@@ -247,3 +265,4 @@ npm run dev
 
 ---
 *VerifyAI — AI flags and explains. The authorised officer decides.*
+

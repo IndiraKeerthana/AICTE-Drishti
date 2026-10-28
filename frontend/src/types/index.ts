@@ -50,6 +50,9 @@ export interface DocumentChecklistItem {
   verification_source?: string | null;
   verification_evidence?: string | null;
   stream_url?: string | null;
+  deficiency_reason?: string | null;
+  filename?: string | null;
+  is_simulated?: boolean;
 }
 
 export interface CheckResult {
@@ -83,6 +86,8 @@ export interface Finding {
   observed_value?: string;
   supporting_document_id?: number;
   supporting_page_number?: number;
+  source_snippet?: string;
+  bounding_box?: string;
   evidence?: Record<string, any>;
   rule_code: string;
   rule_description: string;
