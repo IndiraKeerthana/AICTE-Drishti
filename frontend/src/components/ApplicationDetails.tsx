@@ -133,6 +133,151 @@ export function getPlainDocStatus(item: DocumentChecklistItem): {
   };
 }
 
+export function getFailureDetails(
+  finding: Finding,
+  doc?: { original_filename?: string | null; document_category?: string } | null,
+  chk?: DocumentChecklistItem | null
+): {
+  statusText: string;
+  statusBadgeClass: string;
+  shortExplanation: string;
+} {
+  const fUpper = (finding.finding_code || '').toUpperCase();
+  const catUpper = (finding.category || '').toUpperCase();
+  const titleUpper = (finding.title || '').toUpperCase();
+  const descUpper = (finding.description || '').toUpperCase();
+  const evidence = finding.evidence || {};
+  const obs = finding.observed_value || evidence.observed_value || '';
+  const exp = finding.expected_value || evidence.expected_value || '';
+
+  let statusText = "Details don't match";
+  let statusBadgeClass = 'bg-amber-50 text-amber-800 border-amber-300';
+  let shortExplanation = '';
+
+  // 1. Record not found
+  if (
+    fUpper.includes('NOT_FOUND') ||
+    titleUpper.includes('RECORD NOT FOUND') ||
+    descUpper.includes('NOT FOUND') ||
+    obs.toUpperCase().includes('NOT_FOUND')
+  ) {
+    statusText = 'Record not found';
+    statusBadgeClass = 'bg-rose-50 text-rose-800 border-rose-300';
+    shortExplanation = 'No matching approval was found in the available registry.';
+  }
+  // 2. Possible tampering / Integrity anomalies
+  else if (
+    catUpper === 'INTEGRITY_ANOMALY' ||
+    fUpper.includes('PDF-MOD') ||
+    fUpper.includes('PHASH') ||
+    fUpper.includes('DUP') ||
+    titleUpper.includes('MODIFICATION') ||
+    titleUpper.includes('DUPLICATE') ||
+    titleUpper.includes('REUSED')
+  ) {
+    statusText = 'Possible tampering';
+    statusBadgeClass = 'bg-purple-50 text-purple-800 border-purple-300';
+    if (fUpper.includes('PDF-MOD') || titleUpper.includes('MODIFICATION')) {
+      shortExplanation = 'A document-integrity check detected a suspicious modification.';
+    } else if (fUpper.includes('PHASH') || titleUpper.includes('REUSED')) {
+      shortExplanation = 'A document-integrity check detected similar photo evidence reused across differing facilities.';
+    } else if (fUpper.includes('DUP') || titleUpper.includes('DUPLICATE')) {
+      shortExplanation = 'An identical file was uploaded under multiple different statutory categories.';
+    } else {
+      shortExplanation = 'A document-integrity check detected a suspicious modification.';
+    }
+  }
+  // 3. Unable to verify
+  else if (
+    fUpper.includes('TIMEOUT') ||
+    fUpper.includes('UNAVAILABLE') ||
+    fUpper.includes('EXTRACTION') ||
+    titleUpper.includes('UNAVAILABLE') ||
+    titleUpper.includes('TIMEOUT') ||
+    finding.evidence_classification === 'CHECK_NOT_COMPLETED' ||
+    obs.toUpperCase().includes('TIMEOUT') ||
+    obs.toUpperCase().includes('UNAVAILABLE')
+  ) {
+    statusText = 'Unable to verify';
+    statusBadgeClass = 'bg-slate-100 text-slate-800 border-slate-300';
+    shortExplanation = 'The verification check could not be completed.';
+  }
+  // 4. Validity expired
+  else if (catUpper === 'EXPIRED_DOCUMENT' || fUpper.includes('EXPIRED') || titleUpper.includes('EXPIRED')) {
+    statusText = 'Validity expired';
+    statusBadgeClass = 'bg-rose-50 text-rose-800 border-rose-300';
+    shortExplanation = obs
+      ? `The submitted clearance expired on ${obs}.`
+      : 'The submitted statutory certificate has expired.';
+  }
+  // 5. Revoked / Rejected / Status Invalid
+  else if (
+    titleUpper.includes('REVOKED') ||
+    titleUpper.includes('REJECTED') ||
+    fUpper.includes('REVOKED') ||
+    fUpper.includes('REJECTED') ||
+    titleUpper.includes('STATUS INVALID')
+  ) {
+    statusText = 'Approval invalid';
+    statusBadgeClass = 'bg-rose-50 text-rose-800 border-rose-300';
+    shortExplanation = obs
+      ? `Authority registry records this approval as ${obs}.`
+      : 'Authority registry records this statutory approval as revoked or rejected.';
+  }
+  // 6. Location mismatch
+  else if (
+    titleUpper.includes('LOCATION') ||
+    fUpper.includes('DIFF-LOC') ||
+    descUpper.includes('LOCATION')
+  ) {
+    statusText = "Details don't match";
+    statusBadgeClass = 'bg-amber-50 text-amber-800 border-amber-300';
+    shortExplanation = 'The submitted approval lists a different location from the authority record.';
+  }
+  // 7. Entity mismatch
+  else if (
+    titleUpper.includes('ENTITY') ||
+    fUpper.includes('OTHER-INST') ||
+    descUpper.includes('DIFFERENT INSTITUTION')
+  ) {
+    statusText = "Details don't match";
+    statusBadgeClass = 'bg-amber-50 text-amber-800 border-amber-300';
+    shortExplanation = 'The submitted approval lists a different institution from the authority record.';
+  }
+  // 8. Intake mismatch
+  else if (fUpper.includes('INTAKE') || titleUpper.includes('INTAKE')) {
+    statusText = "Details don't match";
+    statusBadgeClass = 'bg-amber-50 text-amber-800 border-amber-300';
+    shortExplanation =
+      exp && obs
+        ? `Declared intake (${obs}) differs from the approved baseline record (${exp}).`
+        : 'Declared intake contradicts approved baseline in institutional records.';
+  }
+  // 9. Name consistency mismatch
+  else if (fUpper.includes('NAME') || titleUpper.includes('NAME')) {
+    statusText = "Details don't match";
+    statusBadgeClass = 'bg-amber-50 text-amber-800 border-amber-300';
+    shortExplanation = 'The institution name in the submitted attachment does not match the registered title.';
+  }
+  // Default fallback
+  else {
+    statusText = "Details don't match";
+    statusBadgeClass = 'bg-amber-50 text-amber-800 border-amber-300';
+    let cleanDesc = (finding.description || finding.title || '').replace(/\[PLACEHOLDER.*?\]/gi, '').trim();
+    if (cleanDesc.length > 120) {
+      const sentence = cleanDesc.split('.')[0] + '.';
+      if (sentence.length > 20) cleanDesc = sentence;
+    }
+    shortExplanation = cleanDesc || 'The submitted details conflict with official records.';
+  }
+
+  return {
+    statusText,
+    statusBadgeClass,
+    shortExplanation,
+  };
+}
+
 export function getOfficerFriendlyFindingDetails(finding: Finding) {
   const evidence = finding.evidence || {};
   const fUpper = (finding.finding_code || '').toUpperCase();
@@ -323,12 +468,12 @@ export const ApplicationDetails: React.FC<ApplicationDetailsProps> = ({
   const [uploadingReplacement, setUploadingReplacement] = useState(false);
   const [replaceSuccessMsg, setReplaceSuccessMsg] = useState<string | null>(null);
 
-  // Area D: Category filter and expandable technical details
-  const [findingsFilter, setFindingsFilter] = useState<'ALL' | 'MISSING' | 'DISCREPANCY' | 'AWAITING' | 'INTEGRITY' | 'INCOMPLETE'>('ALL');
-  const [expandedTechnicalDetails, setExpandedTechnicalDetails] = useState<Record<number, boolean>>({});
+  // Area D: Findings & Evidence filter and expanded items
+  const [findingsFilter, setFindingsFilter] = useState<'ALL' | 'FLAGGED' | 'MISSING' | 'PENDING' | 'VERIFIED'>('ALL');
+  const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
 
-  const toggleTechnicalDetails = (id: number) => {
-    setExpandedTechnicalDetails((prev) => ({
+  const toggleExpanded = (id: string) => {
+    setExpandedItems((prev) => ({
       ...prev,
       [id]: !prev[id],
     }));
@@ -338,6 +483,11 @@ export const ApplicationDetails: React.FC<ApplicationDetailsProps> = ({
   React.useEffect(() => {
     if (targetFindingId) {
       setHighlightedFindingId(targetFindingId);
+      setExpandedItems((prev) => ({
+        ...prev,
+        [`finding-${targetFindingId}`]: true,
+      }));
+      setFindingsFilter('ALL');
       const timer = setTimeout(() => {
         const el = document.getElementById(`finding-card-${targetFindingId}`);
         if (el) {
@@ -410,22 +560,230 @@ export const ApplicationDetails: React.FC<ApplicationDetailsProps> = ({
   const allFindings = application.findings || [];
   const openFindings = allFindings.filter((f) => f.review_status !== 'RESOLVED');
 
-  // 5 Distinct Finding Categories per Requirement 5
-  const missingDocFindings = allFindings.filter(
-    (f) => getOfficerFriendlyFindingDetails(f).groupType === 'MISSING'
-  );
-  const discrepancyFindings = allFindings.filter(
-    (f) => getOfficerFriendlyFindingDetails(f).groupType === 'DISCREPANCY'
-  );
-  const awaitingAuthFindings = allFindings.filter(
-    (f) => getOfficerFriendlyFindingDetails(f).groupType === 'AWAITING_VERIFICATION'
-  );
-  const integrityFindings = allFindings.filter(
-    (f) => getOfficerFriendlyFindingDetails(f).groupType === 'INTEGRITY'
-  );
-  const incompleteFindings = allFindings.filter(
-    (f) => getOfficerFriendlyFindingDetails(f).groupType === 'INCOMPLETE'
-  );
+  // Area D Data Categorization (Clean, Compact, Easy-to-Understand)
+  // 1. Missing Documents (concise list)
+  const missingDocs = useMemo(() => {
+    return (application.document_checklist || []).filter((item) => !item.is_submitted);
+  }, [application.document_checklist]);
+
+  // 2. Failed Verification / Flagged Items
+  const failedItems = useMemo(() => {
+    const openSubmittedFindings = (application.findings || []).filter(
+      (f) =>
+        f.review_status !== 'RESOLVED' &&
+        f.category !== 'MISSING_DOCUMENT' &&
+        !f.finding_code.startsWith('FND-MISSING')
+    );
+
+    return openSubmittedFindings.map((finding) => {
+      const docId = finding.supporting_document_id;
+      const evidence = finding.evidence || {};
+      const catCode = evidence.document_category;
+      const matchedDoc = application.documents?.find(
+        (d) => (docId && d.id === docId) || (catCode && d.document_category === catCode)
+      );
+      const matchedChecklist = application.document_checklist?.find(
+        (dc) => (docId && dc.document_id === docId) || (catCode && dc.category_code === catCode)
+      );
+      const streamUrl =
+        matchedChecklist?.stream_url ||
+        (matchedDoc ? `/api/documents/${matchedDoc.id}/stream` : null);
+      const docName =
+        matchedChecklist?.document_name || matchedDoc?.original_filename || finding.title;
+      const details = getFailureDetails(finding, matchedDoc, matchedChecklist);
+      const isSimulated = Boolean(
+        evidence.is_simulated ||
+        finding.finding_code.includes('AUTH') ||
+        finding.finding_code.includes('SIMULATED') ||
+        finding.title.includes('Authority') ||
+        (finding.rule_code && finding.rule_code.toUpperCase().includes('AUTH')) ||
+        evidence.verification_source?.includes('SIMULATED') ||
+        (matchedDoc &&
+          [
+            'FIRE_SAFETY_NOC',
+            'BUILDING_PLAN',
+            'LAYOUT_APPROVAL',
+            'AFFILIATION_LETTER',
+            'ENVIRONMENTAL_CLEARANCE',
+            'LAND_TITLE_DEED',
+          ].includes(matchedDoc.document_category))
+      );
+
+      return {
+        finding,
+        documentName: docName,
+        doc: matchedDoc,
+        chk: matchedChecklist,
+        streamUrl,
+        isSimulated,
+        ...details,
+      };
+    });
+  }, [application.findings, application.documents, application.document_checklist]);
+
+  // 3. Pending Verification / Awaiting Confirmation
+  const pendingItems = useMemo(() => {
+    const items: Array<{
+      id: string;
+      name: string;
+      statusText: string;
+      statusBadgeClass: string;
+      shortExplanation: string;
+      isSimulated: boolean;
+      documentId?: number | null;
+      filename?: string | null;
+      streamUrl?: string | null;
+      verificationSource?: string | null;
+    }> = [];
+
+    const failedDocIds = new Set(
+      (application.findings || [])
+        .filter((f) => f.review_status !== 'RESOLVED' && f.supporting_document_id)
+        .map((f) => f.supporting_document_id!)
+    );
+
+    for (const chk of application.document_checklist || []) {
+      if (!chk.is_submitted) continue;
+      if (chk.status === 'VERIFIED') continue;
+      if (chk.document_id && failedDocIds.has(chk.document_id)) continue;
+
+      const doc = application.documents?.find((d) => d.id === chk.document_id);
+      let statusText = 'Awaiting verification';
+      let statusBadgeClass = 'bg-blue-50 text-blue-800 border-blue-200';
+      let shortExplanation =
+        chk.deficiency_reason ||
+        'Submitted document received. Awaiting external authority confirmation.';
+
+      if (chk.status === 'SOURCE_UNAVAILABLE' || chk.status === 'VERIFICATION_UNAVAILABLE') {
+        statusText = 'Unable to verify';
+        statusBadgeClass = 'bg-slate-100 text-slate-800 border-slate-300';
+        shortExplanation = 'The verification check could not be completed (authority gateway unavailable).';
+      } else if (chk.status === 'MANUAL_REVIEW') {
+        statusText = 'Manual confirmation required';
+        statusBadgeClass = 'bg-amber-50 text-amber-800 border-amber-200';
+        shortExplanation = 'Manual confirmation by authorised scrutiny officer required.';
+      } else if (chk.status === 'UNREADABLE') {
+        statusText = 'Unable to verify';
+        statusBadgeClass = 'bg-slate-100 text-slate-800 border-slate-300';
+        shortExplanation = 'Document text could not be extracted cleanly from scanned attachment.';
+      }
+
+      const isSimulated = Boolean(
+        chk.is_simulated ||
+        [
+          'FIRE_SAFETY_NOC',
+          'BUILDING_PLAN',
+          'LAYOUT_APPROVAL',
+          'AFFILIATION_LETTER',
+          'ENVIRONMENTAL_CLEARANCE',
+        ].includes(chk.category_code)
+      );
+
+      items.push({
+        id: `pending-${chk.category_code}`,
+        name: chk.document_name,
+        statusText,
+        statusBadgeClass,
+        shortExplanation,
+        isSimulated,
+        documentId: chk.document_id || doc?.id || null,
+        filename: chk.filename || doc?.original_filename || null,
+        streamUrl: chk.stream_url || (doc ? `/api/documents/${doc.id}/stream` : null),
+        verificationSource: chk.verification_source || null,
+      });
+    }
+
+    return items;
+  }, [application.document_checklist, application.documents, application.findings]);
+
+  // 4. Verified Documents & Requirements (Only name + green 'Verified' status)
+  const verifiedItemsForAreaD = useMemo(() => {
+    const list: Array<{
+      id: string;
+      name: string;
+      isSimulated: boolean;
+      documentId?: number;
+      filename?: string;
+      verificationSource?: string;
+      isResolvedFinding?: boolean;
+    }> = [];
+
+    const seenNames = new Set<string>();
+
+    const failedDocIds = new Set(
+      (application.findings || [])
+        .filter((f) => f.review_status !== 'RESOLVED' && f.supporting_document_id)
+        .map((f) => f.supporting_document_id!)
+    );
+
+    // Verified checklist items
+    for (const chk of application.document_checklist || []) {
+      if (chk.is_submitted && chk.status === 'VERIFIED') {
+        if (chk.document_id && failedDocIds.has(chk.document_id)) continue;
+        const doc = application.documents?.find((d) => d.id === chk.document_id);
+        const isSimulated = Boolean(
+          chk.is_simulated ||
+          [
+            'FIRE_SAFETY_NOC',
+            'BUILDING_PLAN',
+            'LAYOUT_APPROVAL',
+            'AFFILIATION_LETTER',
+            'ENVIRONMENTAL_CLEARANCE',
+          ].includes(chk.category_code)
+        );
+        seenNames.add(chk.document_name.toLowerCase());
+        list.push({
+          id: `verified-chk-${chk.category_code}`,
+          name: chk.document_name,
+          isSimulated,
+          documentId: chk.document_id || doc?.id,
+          filename: chk.filename || doc?.original_filename,
+          verificationSource: chk.verification_source || 'AICTE Automated Scrutiny Rules',
+        });
+      }
+    }
+
+    // Passed checks from activeRun
+    if (activeRun) {
+      for (const cr of activeRun.check_results || []) {
+        if (cr.status === 'PASSED' && !cr.check_code.includes('MANDATORY-DOCS')) {
+          const meta = getPlainEnglishCheckName(cr.check_code);
+          const lower = meta.title.toLowerCase();
+          if (!seenNames.has(lower)) {
+            seenNames.add(lower);
+            list.push({
+              id: `verified-cr-${cr.id}`,
+              name: meta.title,
+              isSimulated: cr.check_code.includes('AUTH'),
+              verificationSource: 'AICTE Compliance Engine',
+            });
+          }
+        }
+      }
+    }
+
+    // Resolved findings
+    for (const f of application.findings || []) {
+      if (f.review_status === 'RESOLVED') {
+        const doc = application.documents?.find((d) => d.id === f.supporting_document_id);
+        const chk = application.document_checklist?.find(
+          (c) => c.document_id === f.supporting_document_id
+        );
+        const name = chk?.document_name || doc?.original_filename || f.title;
+        list.push({
+          id: `verified-fnd-${f.id}`,
+          name,
+          isSimulated: Boolean(f.finding_code.includes('AUTH') || f.evidence?.is_simulated),
+          documentId: f.supporting_document_id || doc?.id,
+          filename: doc?.original_filename,
+          verificationSource: f.evidence?.verification_source || 'Scrutiny Officer Resolution',
+          isResolvedFinding: true,
+        });
+      }
+    }
+
+    return list;
+  }, [application.document_checklist, application.documents, application.findings, activeRun]);
 
   // GROUP 2: Checks That Need Attention (Submitted requirements awaiting verification, confirmation, review, or clarification)
   const checksNeedingAttention = useMemo(() => {
@@ -1241,249 +1599,10 @@ export const ApplicationDetails: React.FC<ApplicationDetailsProps> = ({
           AREA D: Findings and Supporting Evidence (Primary Officer Review Area)
           ========================================================================= */}
       {(() => {
-        const renderOfficerFindingCard = (finding: Finding) => {
-          const evidence = finding.evidence || {};
-          const isSimulated = evidence.is_simulated === true;
-          const isHighlighted = highlightedFindingId === finding.id;
-          const details = getOfficerFriendlyFindingDetails(finding);
-          const isTechExpanded = !!expandedTechnicalDetails[finding.id];
-
-          // Document attachment resolver
-          const docId = finding.supporting_document_id;
-          const catCode = evidence.document_category;
-          const matchedDoc = application.documents?.find(
-            (d) => (docId && d.id === docId) || (catCode && d.document_category === catCode)
-          );
-          const matchedChecklist = application.document_checklist?.find(
-            (dc) => (docId && dc.document_id === docId) || (catCode && dc.category_code === catCode)
-          );
-          const streamUrl = matchedChecklist?.stream_url || (matchedDoc ? `/api/documents/${matchedDoc.id}/stream` : null);
-
-          return (
-            <div
-              key={finding.id}
-              id={`finding-card-${finding.id}`}
-              className={`p-4 rounded-xl border transition-all duration-300 space-y-3 ${
-                isHighlighted
-                  ? 'border-blue-500 bg-blue-50/70 ring-2 ring-blue-500 ring-offset-2 shadow-md'
-                  : 'border-slate-200 bg-white hover:border-slate-300 shadow-xs'
-              }`}
-            >
-              {/* Header: Title, Simulated Notice, and Status Badge */}
-              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 border-b border-slate-100 pb-2.5">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h4 className="font-bold text-slate-900 text-sm leading-snug">
-                      {finding.title}
-                    </h4>
-                    {isHighlighted && (
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-600 text-white animate-pulse">
-                        Focused from Alert
-                      </span>
-                    )}
-                    {(isSimulated ||
-                      finding.finding_code.includes('AUTH') ||
-                      finding.finding_code.includes('SIMULATED') ||
-                      evidence.verification_source?.includes('SIMULATED')) && (
-                      <span className="text-[10px] bg-amber-500 text-slate-950 px-2 py-0.5 rounded font-black border border-amber-600 shadow-xs tracking-wide">
-                        SIMULATED EXTERNAL CHECK &mdash; SYNTHETIC DATA
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className={`px-2.5 py-0.5 rounded text-[11px] font-bold border ${details.statusBadgeClass}`}>
-                    {details.statusLabel}
-                  </span>
-                </div>
-              </div>
-
-              {/* The Three Core Questions (Requirement 8) */}
-              <div className="space-y-2 text-xs">
-                <div>
-                  <span className="font-bold text-slate-900 block sm:inline sm:mr-1">What was found:</span>
-                  <span className="text-slate-700 leading-relaxed">{details.whatWasFound}</span>
-                </div>
-
-                {/* Expected vs Observed (Only when relevant - simple 2-column comparison) */}
-                {details.hasComparison && (
-                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs my-1.5">
-                    <div className="bg-white p-2 rounded border border-slate-200/80">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-0.5">
-                        Expected standard
-                      </span>
-                      <span className="text-slate-800 font-medium">{details.expectedVal}</span>
-                    </div>
-                    <div className="bg-white p-2 rounded border border-rose-200/80">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-rose-700 block mb-0.5">
-                        Observed in submission
-                      </span>
-                      <span className="text-rose-900 font-semibold">{details.observedVal}</span>
-                    </div>
-                  </div>
-                )}
-
-                <div>
-                  <span className="font-bold text-slate-900 block sm:inline sm:mr-1">Why does it matter:</span>
-                  <span className="text-slate-700 leading-relaxed">{details.whyItMatters}</span>
-                </div>
-
-                <div>
-                  <span className="font-bold text-slate-900 block sm:inline sm:mr-1">What should happen next:</span>
-                  <span className="text-slate-700 leading-relaxed">{details.whatNext}</span>
-                </div>
-              </div>
-
-              {/* Expandable Technical Details Area (Requirement 7) */}
-              {isTechExpanded && (
-                <div className="bg-slate-50 rounded-lg p-3 border border-slate-200 text-[11px] space-y-2 text-slate-600">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <div>
-                      <span className="text-slate-400 font-bold block text-[10px] uppercase tracking-wider">Verification Source</span>
-                      <span className="font-medium text-slate-800">{evidence.verification_source || 'AICTE Automated Scrutiny Engine'}</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-400 font-bold block text-[10px] uppercase tracking-wider">Classification Standard</span>
-                      <span className="font-medium text-slate-800">{finding.rule_description?.replace(/\[PLACEHOLDER.*?\]/gi, '').trim() || 'AICTE APH Compliance Protocol'}</span>
-                    </div>
-                  </div>
-                  {finding.source_snippet && (
-                    <div>
-                      <span className="text-slate-400 font-bold block text-[10px] uppercase tracking-wider">Extracted Reference Snippet</span>
-                      <span className="font-mono text-[10px] text-slate-700 bg-white p-2 rounded border border-slate-200 block truncate">
-                        {finding.source_snippet}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Actions Row */}
-              <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-slate-100">
-                <div className="flex items-center gap-2 flex-wrap">
-                  {streamUrl ? (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleOpenDocPreview(
-                          {
-                            document_id: matchedDoc?.id || matchedChecklist?.document_id,
-                            original_filename: matchedDoc?.original_filename || matchedChecklist?.original_filename,
-                            document_name: matchedChecklist?.document_name,
-                            category_code: matchedDoc?.document_category || matchedChecklist?.category_code,
-                            stream_url: streamUrl,
-                            status: matchedChecklist?.status,
-                            verification_source: evidence.verification_source || matchedChecklist?.verification_source,
-                            verification_evidence: evidence.verification_evidence || matchedChecklist?.verification_evidence,
-                            extracted_summary: matchedChecklist?.extracted_summary
-                          },
-                          finding.supporting_page_number || 1,
-                          finding.observed_value || finding.description
-                        )
-                      }
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold text-xs border border-blue-200 transition-colors shadow-xs"
-                    >
-                      <Eye className="w-3.5 h-3.5 text-blue-600" />
-                      <span>
-                        View evidence {finding.supporting_page_number ? `(Page ${finding.supporting_page_number})` : ''}
-                      </span>
-                    </button>
-                  ) : (
-                    <span className="text-[11px] text-slate-400 italic">No document file attached</span>
-                  )}
-
-                  {/* Toggle Technical Details (Requirement 7) */}
-                  <button
-                    type="button"
-                    onClick={() => toggleTechnicalDetails(finding.id)}
-                    className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-500 hover:text-slate-800 px-2 py-1 rounded hover:bg-slate-100 transition-colors"
-                  >
-                    {isTechExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                    <span>{isTechExpanded ? 'Hide technical details' : 'Technical details'}</span>
-                  </button>
-                </div>
-
-                <div className="flex items-center gap-2 sm:ml-auto">
-                  {finding.review_status === 'RESOLVED' ? (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>Resolved</span>
-                    </span>
-                  ) : (
-                    <>
-                      {details.actionType === 'clarification' ? (
-                        <button
-                          type="button"
-                          onClick={() => setSelectedFindingForAction(finding)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs shadow-xs transition-colors"
-                        >
-                          <Send className="w-3.5 h-3.5" />
-                          <span>Request clarification</span>
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setSelectedFindingForAction(finding)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs shadow-xs transition-colors"
-                        >
-                          <FileCheck2 className="w-3.5 h-3.5" />
-                          <span>Review finding</span>
-                        </button>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-          );
-        };
-
-        const renderMissingMandatoryCard = () => (
-          <div className="p-4 rounded-xl border border-rose-200 bg-rose-50/20 space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 border-b border-rose-100 pb-2">
-              <h4 className="font-bold text-slate-900 text-sm">
-                Mandatory Statutory Documents Omitted
-              </h4>
-              <span className="px-2.5 py-0.5 rounded text-[11px] font-bold bg-rose-100 text-rose-800 border border-rose-300">
-                Documents missing
-              </span>
-            </div>
-            <div className="space-y-2 text-xs">
-              <div>
-                <span className="font-bold text-slate-900 block sm:inline sm:mr-1">What was found:</span>
-                <span className="text-slate-700 leading-relaxed">
-                  The following {missingMandatoryDocs.length} mandatory document(s) have not been uploaded: {missingMandatoryDocs.map((d) => d.document_name).join(', ')}.
-                </span>
-              </div>
-              <div>
-                <span className="font-bold text-slate-900 block sm:inline sm:mr-1">Why does it matter:</span>
-                <span className="text-slate-700 leading-relaxed">
-                  Statutory regulations require all mandatory documents to be on record before an application can be cleared for approval.
-                </span>
-              </div>
-              <div>
-                <span className="font-bold text-slate-900 block sm:inline sm:mr-1">What should happen next:</span>
-                <span className="text-slate-700 leading-relaxed">
-                  Issue a deficiency notice requesting the applicant to upload the missing statutory documents.
-                </span>
-              </div>
-            </div>
-            <div className="pt-2 flex justify-end border-t border-rose-100">
-              <button
-                type="button"
-                onClick={() => setIsDeficiencyModalOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs shadow-xs transition-colors"
-              >
-                <Send className="w-3.5 h-3.5" />
-                <span>Request clarification</span>
-              </button>
-            </div>
-          </div>
-        );
+        const totalItemsCount = missingDocs.length + failedItems.length + pendingItems.length + verifiedItemsForAreaD.length;
 
         return (
-          <section className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-5">
+          <section className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
             {/* Section Header */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-3 gap-2">
               <div className="flex items-center space-x-2 text-slate-800">
@@ -1491,241 +1610,495 @@ export const ApplicationDetails: React.FC<ApplicationDetailsProps> = ({
                 <div>
                   <h2 className="text-base font-bold text-slate-900">Findings and Supporting Evidence</h2>
                   <p className="text-xs text-slate-500">
-                    Primary review area for examining evidence, inspecting attached documents, and determining next actions
+                    Verification findings, document authenticity status, and supporting evidence
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-2 flex-wrap text-xs font-semibold">
-                {(missingDocFindings.length > 0 || missingMandatoryDocs.length > 0) && (
+                {failedItems.length > 0 && (
                   <span className="px-2.5 py-0.5 rounded bg-rose-50 text-rose-800 border border-rose-200">
-                    {missingDocFindings.length || missingMandatoryDocs.length} Missing Documents
+                    {failedItems.length} {failedItems.length === 1 ? 'Issue' : 'Issues'} Flagged
                   </span>
                 )}
-                {discrepancyFindings.length > 0 && (
+                {missingDocs.length > 0 && (
                   <span className="px-2.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200">
-                    {discrepancyFindings.length} Discrepanc{discrepancyFindings.length > 1 ? 'ies' : 'y'}
+                    {missingDocs.length} Missing Documents
                   </span>
                 )}
-                {awaitingAuthFindings.length > 0 && (
+                {pendingItems.length > 0 && (
                   <span className="px-2.5 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-200">
-                    {awaitingAuthFindings.length} Awaiting Verification
+                    {pendingItems.length} Pending
                   </span>
                 )}
-                {integrityFindings.length > 0 && (
-                  <span className="px-2.5 py-0.5 rounded bg-purple-50 text-purple-800 border border-purple-200">
-                    {integrityFindings.length} Integrity Review
-                  </span>
-                )}
-                {incompleteFindings.length > 0 && (
-                  <span className="px-2.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
-                    {incompleteFindings.length} Incomplete Checks
+                {verifiedItemsForAreaD.length > 0 && (
+                  <span className="px-2.5 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200">
+                    {verifiedItemsForAreaD.length} Verified
                   </span>
                 )}
               </div>
             </div>
 
-            {/* Category Navigation Tabs (Requirement 5) */}
-            {allFindings.length > 0 && (
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs border-b border-slate-100">
+            {/* Quick Filter Navigation Tabs */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs border-b border-slate-100">
+              <button
+                type="button"
+                onClick={() => setFindingsFilter('ALL')}
+                className={`px-3 py-1.5 rounded-lg font-semibold transition-colors shrink-0 ${
+                  findingsFilter === 'ALL'
+                    ? 'bg-slate-900 text-white shadow-xs'
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                }`}
+              >
+                All Items ({totalItemsCount})
+              </button>
+
+              {failedItems.length > 0 && (
                 <button
                   type="button"
-                  onClick={() => setFindingsFilter('ALL')}
-                  className={`px-3 py-1.5 rounded-lg font-semibold transition-colors shrink-0 ${
-                    findingsFilter === 'ALL'
-                      ? 'bg-slate-900 text-white shadow-xs'
-                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                  onClick={() => setFindingsFilter('FLAGGED')}
+                  className={`px-3 py-1.5 rounded-lg font-semibold transition-colors shrink-0 flex items-center gap-1.5 ${
+                    findingsFilter === 'FLAGGED'
+                      ? 'bg-rose-600 text-white shadow-xs'
+                      : 'bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200'
                   }`}
                 >
-                  All Categories ({allFindings.length})
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  <span>Flagged Issues ({failedItems.length})</span>
                 </button>
+              )}
 
-                {(missingDocFindings.length > 0 || missingMandatoryDocs.length > 0) && (
-                  <button
-                    type="button"
-                    onClick={() => setFindingsFilter('MISSING')}
-                    className={`px-3 py-1.5 rounded-lg font-semibold transition-colors shrink-0 flex items-center gap-1.5 ${
-                      findingsFilter === 'MISSING'
-                        ? 'bg-rose-600 text-white shadow-xs'
-                        : 'bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200'
-                    }`}
-                  >
-                    <FileX2 className="w-3.5 h-3.5" />
-                    <span>Missing Documents ({missingDocFindings.length || missingMandatoryDocs.length})</span>
-                  </button>
-                )}
+              {missingDocs.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setFindingsFilter('MISSING')}
+                  className={`px-3 py-1.5 rounded-lg font-semibold transition-colors shrink-0 flex items-center gap-1.5 ${
+                    findingsFilter === 'MISSING'
+                      ? 'bg-amber-600 text-white shadow-xs'
+                      : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200'
+                  }`}
+                >
+                  <FileX2 className="w-3.5 h-3.5" />
+                  <span>Missing Documents ({missingDocs.length})</span>
+                </button>
+              )}
 
-                {discrepancyFindings.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setFindingsFilter('DISCREPANCY')}
-                    className={`px-3 py-1.5 rounded-lg font-semibold transition-colors shrink-0 flex items-center gap-1.5 ${
-                      findingsFilter === 'DISCREPANCY'
-                        ? 'bg-amber-600 text-white shadow-xs'
-                        : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200'
-                    }`}
-                  >
-                    <AlertTriangle className="w-3.5 h-3.5" />
-                    <span>Discrepancies ({discrepancyFindings.length})</span>
-                  </button>
-                )}
+              {pendingItems.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setFindingsFilter('PENDING')}
+                  className={`px-3 py-1.5 rounded-lg font-semibold transition-colors shrink-0 flex items-center gap-1.5 ${
+                    findingsFilter === 'PENDING'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200'
+                  }`}
+                >
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>Pending Verification ({pendingItems.length})</span>
+                </button>
+              )}
 
-                {awaitingAuthFindings.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setFindingsFilter('AWAITING')}
-                    className={`px-3 py-1.5 rounded-lg font-semibold transition-colors shrink-0 flex items-center gap-1.5 ${
-                      findingsFilter === 'AWAITING'
-                        ? 'bg-blue-600 text-white shadow-xs'
-                        : 'bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200'
-                    }`}
-                  >
-                    <Clock className="w-3.5 h-3.5" />
-                    <span>Awaiting Verification ({awaitingAuthFindings.length})</span>
-                  </button>
-                )}
+              {verifiedItemsForAreaD.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setFindingsFilter('VERIFIED')}
+                  className={`px-3 py-1.5 rounded-lg font-semibold transition-colors shrink-0 flex items-center gap-1.5 ${
+                    findingsFilter === 'VERIFIED'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200'
+                  }`}
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Verified ({verifiedItemsForAreaD.length})</span>
+                </button>
+              )}
+            </div>
 
-                {integrityFindings.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setFindingsFilter('INTEGRITY')}
-                    className={`px-3 py-1.5 rounded-lg font-semibold transition-colors shrink-0 flex items-center gap-1.5 ${
-                      findingsFilter === 'INTEGRITY'
-                        ? 'bg-purple-600 text-white shadow-xs'
-                        : 'bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200'
-                    }`}
-                  >
-                    <ShieldAlert className="w-3.5 h-3.5" />
-                    <span>Document Integrity ({integrityFindings.length})</span>
-                  </button>
-                )}
-
-                {incompleteFindings.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setFindingsFilter('INCOMPLETE')}
-                    className={`px-3 py-1.5 rounded-lg font-semibold transition-colors shrink-0 flex items-center gap-1.5 ${
-                      findingsFilter === 'INCOMPLETE'
-                        ? 'bg-slate-700 text-white shadow-xs'
-                        : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300'
-                    }`}
-                  >
-                    <HelpCircle className="w-3.5 h-3.5" />
-                    <span>Incomplete Checks ({incompleteFindings.length})</span>
-                  </button>
-                )}
-              </div>
-            )}
-
-            {allFindings.length === 0 && missingMandatoryDocs.length === 0 ? (
+            {/* Empty state if nothing at all */}
+            {totalItemsCount === 0 && (
               <div className="p-8 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
                 <CheckCircle2 className="w-8 h-8 text-emerald-600 mx-auto mb-2" />
-                <p className="font-bold text-slate-800 text-sm">No compliance issues or deficiencies recorded</p>
+                <p className="font-bold text-slate-800 text-sm">No findings or document items recorded</p>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  All submitted evidence conforms to configured AICTE handbook standards.
+                  Run automated scrutiny to evaluate submitted documents.
                 </p>
               </div>
-            ) : (
-              <div className="space-y-6">
-                {/* GROUP 1: Missing Mandatory Documents */}
-                {(findingsFilter === 'ALL' || findingsFilter === 'MISSING') && (missingDocFindings.length > 0 || missingMandatoryDocs.length > 0) && (
-                  <div className="space-y-3">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-rose-100 pb-2 gap-1">
-                      <div className="flex items-center gap-2">
-                        <FileX2 className="w-4 h-4 text-rose-600 shrink-0" />
-                        <h3 className="text-xs font-bold uppercase tracking-wider text-rose-900">
-                          Missing Mandatory Documents ({missingDocFindings.length || missingMandatoryDocs.length})
-                        </h3>
-                      </div>
-                      <span className="text-[11px] text-slate-500">
-                        Statutory attachments omitted from submission; required before approval can proceed
-                      </span>
-                    </div>
-
-                    {missingDocFindings.length > 0 ? (
-                      missingDocFindings.map(renderOfficerFindingCard)
-                    ) : (
-                      renderMissingMandatoryCard()
-                    )}
-                  </div>
-                )}
-
-                {/* GROUP 2: Discrepancies & Baseline Differences */}
-                {(findingsFilter === 'ALL' || findingsFilter === 'DISCREPANCY') && discrepancyFindings.length > 0 && (
-                  <div className="space-y-3">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-amber-100 pb-2 gap-1">
-                      <div className="flex items-center gap-2">
-                        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                        <h3 className="text-xs font-bold uppercase tracking-wider text-amber-900">
-                          Discrepancies & Baseline Differences ({discrepancyFindings.length})
-                        </h3>
-                      </div>
-                      <span className="text-[11px] text-slate-500">
-                        Declared figures or institutional details contradict official baseline records
-                      </span>
-                    </div>
-
-                    {discrepancyFindings.map(renderOfficerFindingCard)}
-                  </div>
-                )}
-
-                {/* GROUP 3: Submitted Requirements Awaiting Verification or Approval */}
-                {(findingsFilter === 'ALL' || findingsFilter === 'AWAITING') && awaitingAuthFindings.length > 0 && (
-                  <div className="space-y-3">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-blue-100 pb-2 gap-1">
-                      <div className="flex items-center gap-2">
-                        <Clock className="w-4 h-4 text-blue-600 shrink-0" />
-                        <h3 className="text-xs font-bold uppercase tracking-wider text-blue-900">
-                          Submitted Requirements Awaiting Verification or Approval ({awaitingAuthFindings.length})
-                        </h3>
-                      </div>
-                      <span className="text-[11px] text-slate-500">
-                        Statutory approvals and certificates requiring external confirmation or active renewal
-                      </span>
-                    </div>
-
-                    {awaitingAuthFindings.map(renderOfficerFindingCard)}
-                  </div>
-                )}
-
-                {/* GROUP 4: Potential Document Integrity Issues */}
-                {(findingsFilter === 'ALL' || findingsFilter === 'INTEGRITY') && integrityFindings.length > 0 && (
-                  <div className="space-y-3">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-purple-100 pb-2 gap-1">
-                      <div className="flex items-center gap-2">
-                        <ShieldAlert className="w-4 h-4 text-purple-600 shrink-0" />
-                        <h3 className="text-xs font-bold uppercase tracking-wider text-purple-900">
-                          Potential Document Integrity Issues ({integrityFindings.length})
-                        </h3>
-                      </div>
-                      <span className="text-[11px] text-slate-500">
-                        Document structure indicators requiring visual inspection to confirm authenticity
-                      </span>
-                    </div>
-
-                    {integrityFindings.map(renderOfficerFindingCard)}
-                  </div>
-                )}
-
-                {/* GROUP 5: Incomplete Checks & Gateway Limitations */}
-                {(findingsFilter === 'ALL' || findingsFilter === 'INCOMPLETE') && incompleteFindings.length > 0 && (
-                  <div className="space-y-3">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 pb-2 gap-1">
-                      <div className="flex items-center gap-2">
-                        <HelpCircle className="w-4 h-4 text-slate-600 shrink-0" />
-                        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
-                          Incomplete Checks & Gateway Limitations ({incompleteFindings.length})
-                        </h3>
-                      </div>
-                      <span className="text-[11px] text-slate-500">
-                        Automated checks that could not be fully completed due to service or extraction limits
-                      </span>
-                    </div>
-
-                    {incompleteFindings.map(renderOfficerFindingCard)}
-                  </div>
-                )}
-              </div>
             )}
+
+            {/* Content Groups */}
+            <div className="space-y-5">
+              {/* -------------------------------------------------------------
+                  1. MISSING DOCUMENTS (Concise message + list of names + 1 action)
+                  ------------------------------------------------------------- */}
+              {(findingsFilter === 'ALL' || findingsFilter === 'MISSING') && missingDocs.length > 0 && (
+                <div className="p-4 rounded-xl border border-rose-200 bg-rose-50/25 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-rose-100 pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <FileX2 className="w-5 h-5 text-rose-600 shrink-0" />
+                      <h3 className="font-bold text-slate-900 text-base">
+                        {missingDocs.length} {missingDocs.length === 1 ? 'document' : 'documents'} missing
+                      </h3>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsDeficiencyModalOpen(true)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs shadow-xs transition-colors shrink-0"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      <span>Request Missing Documents</span>
+                    </button>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <p className="text-xs text-slate-600 font-medium">The following documents have not been submitted:</p>
+                    <div className="flex flex-wrap gap-2 pt-0.5">
+                      {missingDocs.map((doc, idx) => (
+                        <span
+                          key={idx}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-white text-slate-800 border border-rose-200 shadow-xs"
+                        >
+                          <span>{doc.document_name}</span>
+                          {doc.is_mandatory && (
+                            <span className="text-[10px] font-bold text-rose-600 uppercase tracking-wide">
+                              (Mandatory)
+                            </span>
+                          )}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* -------------------------------------------------------------
+                  2. FLAGGED ISSUES / FAILED VERIFICATION
+                  ------------------------------------------------------------- */}
+              {(findingsFilter === 'ALL' || findingsFilter === 'FLAGGED') && failedItems.length > 0 && (
+                <div className="space-y-2.5">
+                  <div className="flex items-center gap-2 border-b border-slate-100 pb-1.5">
+                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900">
+                      Verification Issues & Flagged Items ({failedItems.length})
+                    </h3>
+                  </div>
+
+                  <div className="space-y-2">
+                    {failedItems.map((item) => {
+                      const isExpanded = !!expandedItems[`finding-${item.finding.id}`];
+                      const isHighlighted = highlightedFindingId === item.finding.id;
+
+                      return (
+                        <div
+                          key={item.finding.id}
+                          id={`finding-card-${item.finding.id}`}
+                          className={`p-3.5 rounded-xl border transition-all ${
+                            isHighlighted
+                              ? 'border-blue-500 bg-blue-50/70 ring-2 ring-blue-500 ring-offset-2 shadow-md'
+                              : 'border-slate-200 bg-white hover:border-slate-300 shadow-xs'
+                          }`}
+                        >
+                          {/* Main concise line: Document Name + Status + Short Explanation */}
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-bold text-slate-900 text-sm">{item.documentName}</span>
+                              <span className={`px-2.5 py-0.5 rounded text-xs font-bold border ${item.statusBadgeClass}`}>
+                                {item.statusText}
+                              </span>
+                              {item.isSimulated && (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-black bg-amber-500 text-slate-950 border border-amber-600 tracking-wide shadow-xs">
+                                  SIMULATED EXTERNAL CHECK &mdash; SYNTHETIC DATA
+                                </span>
+                              )}
+                              {isHighlighted && (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-600 text-white animate-pulse">
+                                  Focused from Alert
+                                </span>
+                              )}
+                              <span className="text-xs text-slate-600 font-normal">
+                                &mdash; {item.shortExplanation}
+                              </span>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => toggleExpanded(`finding-${item.finding.id}`)}
+                              className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-semibold shrink-0"
+                            >
+                              <span>{isExpanded ? 'Hide details' : 'View details'}</span>
+                              {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                            </button>
+                          </div>
+
+                          {/* Supporting evidence and further details only when officer opens */}
+                          {isExpanded && (
+                            <div className="mt-3 pt-3 border-t border-slate-100 text-xs space-y-3">
+                              <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-2">
+                                <div className="font-bold text-slate-700 text-[11px] uppercase tracking-wider">
+                                  Supporting Evidence & Observations
+                                </div>
+                                <p className="text-slate-700 leading-relaxed">{item.finding.description}</p>
+
+                                {(item.finding.expected_value || item.finding.observed_value) && (
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-1">
+                                    {item.finding.expected_value && (
+                                      <div className="bg-white p-2 rounded border border-slate-200">
+                                        <span className="text-[10px] uppercase font-bold text-slate-500 block">Expected Record</span>
+                                        <span className="text-slate-800">{item.finding.expected_value}</span>
+                                      </div>
+                                    )}
+                                    {item.finding.observed_value && (
+                                      <div className="bg-white p-2 rounded border border-rose-200">
+                                        <span className="text-[10px] uppercase font-bold text-rose-700 block">Observed in Submission</span>
+                                        <span className="text-rose-900 font-semibold">{item.finding.observed_value}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+
+                                <div className="flex flex-wrap items-center justify-between text-[11px] text-slate-500 pt-1.5 border-t border-slate-200/60 gap-1">
+                                  <span>
+                                    Verification Source:{' '}
+                                    <strong className="text-slate-700">
+                                      {item.finding.evidence?.verification_source || 'AICTE Automated Scrutiny Engine'}
+                                    </strong>
+                                  </span>
+                                  {item.doc && (
+                                    <span>
+                                      Attachment: <strong className="text-slate-700">{item.doc.original_filename}</strong>
+                                      {item.finding.supporting_page_number ? ` (Page ${item.finding.supporting_page_number})` : ''}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Action row */}
+                              <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                                {item.streamUrl ? (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleOpenDocPreview(
+                                        {
+                                          document_id: item.doc?.id || item.chk?.document_id,
+                                          original_filename: item.doc?.original_filename || item.chk?.original_filename,
+                                          document_name: item.chk?.document_name,
+                                          category_code: item.doc?.document_category || item.chk?.category_code,
+                                          stream_url: item.streamUrl,
+                                          status: item.chk?.status,
+                                          verification_source: item.finding.evidence?.verification_source || item.chk?.verification_source,
+                                          verification_evidence: item.finding.evidence?.verification_evidence || item.chk?.verification_evidence,
+                                          extracted_summary: item.chk?.extracted_summary,
+                                        },
+                                        item.finding.supporting_page_number || 1,
+                                        item.finding.observed_value || item.finding.description
+                                      )
+                                    }
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold text-xs border border-blue-200 shadow-xs transition-colors"
+                                  >
+                                    <Eye className="w-3.5 h-3.5 text-blue-600" />
+                                    <span>
+                                      Inspect Document {item.finding.supporting_page_number ? `(Page ${item.finding.supporting_page_number})` : ''}
+                                    </span>
+                                  </button>
+                                ) : (
+                                  <span className="text-[11px] text-slate-400 italic">No document file attached</span>
+                                )}
+
+                                <div className="flex items-center gap-2 ml-auto">
+                                  {item.finding.review_status === 'RESOLVED' ? (
+                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                      <span>Resolved</span>
+                                    </span>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedFindingForAction(item.finding)}
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs shadow-xs transition-colors"
+                                    >
+                                      <FileCheck2 className="w-3.5 h-3.5" />
+                                      <span>Review Finding</span>
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* -------------------------------------------------------------
+                  3. PENDING VERIFICATION (Awaiting verification / Manual confirmation)
+                  ------------------------------------------------------------- */}
+              {(findingsFilter === 'ALL' || findingsFilter === 'PENDING') && pendingItems.length > 0 && (
+                <div className="space-y-2.5">
+                  <div className="flex items-center gap-2 border-b border-slate-100 pb-1.5">
+                    <Clock className="w-4 h-4 text-blue-600 shrink-0" />
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900">
+                      Pending Verification ({pendingItems.length})
+                    </h3>
+                  </div>
+
+                  <div className="space-y-2">
+                    {pendingItems.map((item) => {
+                      const isExpanded = !!expandedItems[item.id];
+
+                      return (
+                        <div
+                          key={item.id}
+                          className="p-3.5 rounded-xl border border-slate-200 bg-white hover:border-slate-300 shadow-xs"
+                        >
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-bold text-slate-900 text-sm">{item.name}</span>
+                              <span className={`px-2.5 py-0.5 rounded text-xs font-semibold border ${item.statusBadgeClass}`}>
+                                {item.statusText}
+                              </span>
+                              {item.isSimulated && (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-black bg-amber-500 text-slate-950 border border-amber-600 tracking-wide shadow-xs">
+                                  SIMULATED EXTERNAL CHECK &mdash; SYNTHETIC DATA
+                                </span>
+                              )}
+                              <span className="text-xs text-slate-600 font-normal">
+                                &mdash; {item.shortExplanation}
+                              </span>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => toggleExpanded(item.id)}
+                              className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-semibold shrink-0"
+                            >
+                              <span>{isExpanded ? 'Hide details' : 'View details'}</span>
+                              {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                            </button>
+                          </div>
+
+                          {isExpanded && (
+                            <div className="mt-3 pt-3 border-t border-slate-100 text-xs space-y-2">
+                              <p className="text-slate-700 leading-relaxed">{item.shortExplanation}</p>
+                              <div className="flex flex-wrap items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-100 gap-2">
+                                <span>
+                                  Source: <strong className="text-slate-700">{item.verificationSource || 'Authority Gateway / Manual Queue'}</strong>
+                                  {item.filename && <span className="ml-2 font-mono">({item.filename})</span>}
+                                </span>
+                                {item.streamUrl && item.documentId && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const fullDoc = application.documents?.find((d) => d.id === item.documentId);
+                                      if (fullDoc) {
+                                        handleOpenDocPreview({
+                                          document_id: fullDoc.id,
+                                          stream_url: `/api/applications/${application.id}/documents/${fullDoc.id}/raw`,
+                                          original_filename: fullDoc.original_filename,
+                                          category_code: fullDoc.document_category,
+                                        });
+                                      }
+                                    }}
+                                    className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 font-semibold hover:underline"
+                                  >
+                                    <Eye className="w-3.5 h-3.5" />
+                                    <span>Inspect Document</span>
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* -------------------------------------------------------------
+                  4. VERIFIED DOCUMENTS & REQUIREMENTS (Only Name + Green Verified status)
+                  ------------------------------------------------------------- */}
+              {(findingsFilter === 'ALL' || findingsFilter === 'VERIFIED') && verifiedItemsForAreaD.length > 0 && (
+                <div className="space-y-2.5">
+                  <div className="flex items-center gap-2 border-b border-slate-100 pb-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900">
+                      Verified Documents & Requirements ({verifiedItemsForAreaD.length})
+                    </h3>
+                  </div>
+
+                  <div className="space-y-2">
+                    {verifiedItemsForAreaD.map((item) => {
+                      const isExpanded = !!expandedItems[item.id];
+
+                      return (
+                        <div
+                          key={item.id}
+                          className="p-3 rounded-lg border border-slate-100 bg-slate-50/70 hover:bg-slate-50 transition-colors"
+                        >
+                          {/* Simple, clean line: Document name and simple green Verified status */}
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                              <span className="font-semibold text-slate-900 text-sm">{item.name}</span>
+                              <span className="px-2.5 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                Verified
+                              </span>
+                              {item.isSimulated && (
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-amber-500 text-slate-950 border border-amber-600 tracking-wide shadow-xs">
+                                  SIMULATED EXTERNAL CHECK &mdash; SYNTHETIC DATA
+                                </span>
+                              )}
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => toggleExpanded(item.id)}
+                              className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-800 shrink-0 font-medium"
+                              title="Expand details"
+                            >
+                              <span>{isExpanded ? 'Hide details' : 'Details'}</span>
+                              {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                            </button>
+                          </div>
+
+                          {/* Expand details only if needed */}
+                          {isExpanded && (
+                            <div className="mt-2.5 pt-2.5 border-t border-slate-200/60 text-xs text-slate-600 flex flex-wrap items-center justify-between gap-2">
+                              <div>
+                                <span className="text-slate-500">Verification Source: </span>
+                                <span className="font-semibold text-slate-800">{item.verificationSource || 'AICTE Automated Scrutiny Engine'}</span>
+                                {item.filename && <span className="ml-2 font-mono text-[11px] text-slate-500">({item.filename})</span>}
+                              </div>
+                              {item.documentId && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const fullDoc = application.documents?.find((d) => d.id === item.documentId);
+                                    if (fullDoc) {
+                                      handleOpenDocPreview({
+                                        document_id: fullDoc.id,
+                                        stream_url: `/api/applications/${application.id}/documents/${fullDoc.id}/raw`,
+                                        original_filename: fullDoc.original_filename,
+                                        category_code: fullDoc.document_category,
+                                      });
+                                    }
+                                  }}
+                                  className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 font-semibold hover:underline"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                  <span>Inspect Document</span>
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
           </section>
         );
       })()}
