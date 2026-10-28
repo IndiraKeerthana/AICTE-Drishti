@@ -22,11 +22,11 @@ import {
 const DEFAULT_USERS: UserInfo[] = [
   {
     username: 'officer1',
-    full_name: 'Dr. V. Sharma',
+    full_name: 'Officer',
     role: 'OFFICER',
-    designation: 'AICTE Scrutiny Officer',
+    designation: 'Scrutiny Officer',
     institution_id: null,
-    email: 'v.sharma@aicte-india.org'
+    email: 'officer@aicte-india.org'
   },
   {
     username: 'approver1',
@@ -62,12 +62,17 @@ export function App() {
     fetchUsers()
       .then((users) => {
         if (users && users.length > 0) {
-          const filtered = users.filter(u => u.role !== 'APPLICANT');
+          const mappedUsers = users.map(u =>
+            (u.role === 'OFFICER' || u.username === 'officer1')
+              ? { ...u, full_name: 'Officer' }
+              : u
+          );
+          const filtered = mappedUsers.filter(u => u.role !== 'APPLICANT');
           if (filtered.length > 0) {
             setAvailableUsers(filtered);
             setCurrentUser(filtered[0]);
           } else {
-            setAvailableUsers(users);
+            setAvailableUsers(mappedUsers);
           }
         }
       })
@@ -303,7 +308,7 @@ export function App() {
           <div className="hidden md:flex items-center space-x-4 text-[11px] text-slate-400">
             <span>AICTE Approval Process Handbook (APH) Scrutiny Support</span>
             <span>&bull;</span>
-            <span>Authorised Official: <strong className="text-slate-200">AICTE Official</strong> (Scrutiny & Approval Officer)</span>
+            <span>Authorised Official: <strong className="text-slate-200">Officer</strong> (Scrutiny & Approval Officer)</span>
           </div>
         </footer>
       </div>

@@ -1,4 +1,4 @@
-# VerifyAI — Requirements Traceability Matrix (RTM)
+# AICTE-Drishti — Requirements Traceability Matrix (RTM)
 
 This document provides complete end-to-end traceability from the SIH 2026 Problem Statement requirements to backend services, API routes, data models, frontend components, and automated tests.
 

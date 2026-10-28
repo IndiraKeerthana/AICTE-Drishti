@@ -1,4 +1,4 @@
-# VerifyAI — Project Overview
+# AICTE-Drishti — Project Overview
 **AICTE Application Intelligence & Regulatory Verification Platform**  
 *Smart India Hackathon 2026 | Problem Statement 26261*
 
@@ -20,12 +20,12 @@ Each academic year, the All India Council for Technical Education (AICTE) proces
 3. **Inconsistent Scrutiny & Undetected Discrepancies**: Subtle inconsistencies—such as mismatched land survey numbers, expired NOC validity periods, faculty members simultaneously listed across multiple institutions, or sanctioned intake exceeding built-up instructional space—can be easily missed during manual review.
 4. **Lack of Explainable Audit Trails**: When applications are marked deficient, institutions frequently seek clarification on the exact regulatory clause or document defect that triggered the query, leading to prolonged appeals and delays.
 
-### 1.2 The VerifyAI Solution
-**VerifyAI** is an AI-assisted regulatory compliance, document authentication, and preliminary scrutiny platform tailored to the AICTE approval lifecycle. It ingests institutional applications and supporting documents, parses digital and scanned files via multi-modal extraction, performs deterministic cross-document and institutional record reconciliation, executes versioned AICTE Approval Process Handbook (APH) compliance checks, and generates evidence-linked findings for authorized scrutiny officers.
+### 1.2 The AICTE-Drishti Solution
+**AICTE-Drishti** is an AI-assisted regulatory compliance, document authentication, and preliminary scrutiny platform tailored to the AICTE approval lifecycle. It ingests institutional applications and supporting documents, parses digital and scanned files via multi-modal extraction, performs deterministic cross-document and institutional record reconciliation, executes versioned AICTE Approval Process Handbook (APH) compliance checks, and generates evidence-linked findings for authorized scrutiny officers.
 
-VerifyAI is built upon a fundamental architectural principle:
+AICTE-Drishti is built upon a fundamental architectural principle:
 > **"The system flags and explains. The AICTE officer decides."**  
-> VerifyAI automates cognitive drudgery and surfaces evidence-linked anomalies; it never makes automated adverse regulatory decisions.
+> AICTE-Drishti automates cognitive drudgery and surfaces evidence-linked anomalies; it never makes automated adverse regulatory decisions.
 
 ---
 
@@ -38,7 +38,7 @@ VerifyAI is built upon a fundamental architectural principle:
 > 1. All proposed rules in this specification are grounded in public AICTE Approval Process Handbook guidelines (2024–2027 norms), but are explicitly designated as:  
 >    `[PLACEHOLDER PENDING OFFICIAL HANDBOOK MAPPING]`.
 > 2. Specific rule codes, clauses, and handbook page numbers will be formally bound and verified once the official APH PDF document is provided.
-> 3. VerifyAI does not invent regulatory requirements or claim official AICTE authorization. Rules are structured as versioned YAML data files that can be updated without altering application code.
+> 3. AICTE-Drishti does not invent regulatory requirements or claim official AICTE authorization. Rules are structured as versioned YAML data files that can be updated without altering application code.
 
 ---
 
@@ -55,7 +55,7 @@ VerifyAI is built upon a fundamental architectural principle:
 
 ## 4. Target Users & Persona Profiles
 
-| User Persona | Role & Responsibilities | Key Interactions in VerifyAI |
+| User Persona | Role & Responsibilities | Key Interactions in AICTE-Drishti |
 | :--- | :--- | :--- |
 | **AICTE Scrutiny Officer (Reviewer)** | Authorized officer conducting preliminary or detailed scrutiny of institutional applications. | Navigates the Scrutiny Dashboard; examines evidence-linked findings; inspects side-by-side document proof; acknowledges/resolves findings; requests deficiency rectification; records official recommendations. |
 | **AICTE Regional Officer / Committee Chair** | Senior administrator supervising scrutiny workflows across regional jurisdictions. | Monitors triage queue, application processing times, high-priority risk patterns, and audit logs; conducts final review before forwarding to Regional Committee. |
@@ -66,11 +66,11 @@ VerifyAI is built upon a fundamental architectural principle:
 
 ## 5. Functional Modules
 
-VerifyAI comprises 10 tightly integrated functional modules:
+AICTE-Drishti comprises 10 tightly integrated functional modules:
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
-│                        VERIFYAI CORE PLATFORM                          │
+│                      AICTE-DRISHTI CORE PLATFORM                       │
 ├─────────────────────────┬─────────────────────────┬────────────────────┤
 │ 1. Application Intake   │ 2. Institutional Record │ 3. Intelligent Doc │
 │    & Category Checklist │    Retrieval & Adapters │    Processing (IDP)│

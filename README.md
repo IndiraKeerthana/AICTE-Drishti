@@ -1,13 +1,13 @@
-# VerifyAI — AICTE Application Intelligence & Regulatory Verification Platform
+# AICTE-Drishti — AICTE Application Intelligence & Regulatory Verification Platform
 **Smart India Hackathon 2026 | Problem Statement 26261**
 
-VerifyAI automates preliminary institutional scrutiny, document authentication, cross-document reconciliation, and regulatory compliance verification for AICTE approvals.
+AICTE-Drishti automates preliminary institutional scrutiny, document authentication, cross-document reconciliation, and regulatory compliance verification for AICTE approvals.
 
 ---
 
 ## 1. Core Architectural Principle
 > **"The system flags and explains. The AICTE officer decides."**  
-> VerifyAI automates cognitive extraction and surfaces evidence-linked anomalies; it never makes automated adverse regulatory decisions.
+> AICTE-Drishti automates cognitive extraction and surfaces evidence-linked anomalies; it never makes automated adverse regulatory decisions.
 
 ---
 
@@ -125,7 +125,7 @@ The frontend UI will be available at:
 
 ## 5. Running Automated Backend Tests
 
-VerifyAI includes a pytest test suite covering the entire vertical slice:
+AICTE-Drishti includes a pytest test suite covering the entire vertical slice:
 ```bash
 cd backend
 .\.venv\Scripts\pytest.exe -v

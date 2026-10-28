@@ -611,7 +611,9 @@ export const SystemAdminView: React.FC = () => {
                 <tbody className="divide-y divide-slate-100">
                   {users.map((u) => (
                     <tr key={u.username} className="hover:bg-slate-50/70">
-                      <td className="py-3 px-4 font-bold text-slate-800">{u.full_name}</td>
+                      <td className="py-3 px-4 font-bold text-slate-800">
+                        {(u.role === 'OFFICER' || u.username === 'officer1') ? 'Officer' : u.full_name}
+                      </td>
                       <td className="py-3 px-4 text-slate-600">{u.designation}</td>
                       <td className="py-3 px-4">
                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${

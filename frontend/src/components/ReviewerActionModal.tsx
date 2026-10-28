@@ -15,7 +15,7 @@ export const ReviewerActionModal: React.FC<ReviewerActionModalProps> = ({
 }) => {
   const [actionType, setActionType] = useState('REQUEST_DEFICIENCY');
   const [justification, setJustification] = useState('');
-  const [reviewerName, setReviewerName] = useState('Dr. V. Sharma (AICTE Scrutiny Officer)');
+  const [reviewerName, setReviewerName] = useState('Officer');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

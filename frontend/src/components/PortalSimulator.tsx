@@ -153,7 +153,7 @@ export const PortalSimulator: React.FC = () => {
               DEMO INTEGRATION — NOT CONNECTED TO AICTE PRODUCTION
             </h3>
             <p className="text-xs text-amber-800/90 mt-0.5">
-              Simulates bi-directional REST interoperability between external state/institution portals and VerifyAI's scrutiny engine.
+              Simulates bi-directional REST interoperability between external state/institution portals and AICTE-Drishti's scrutiny engine.
             </p>
           </div>
         </div>

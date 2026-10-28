@@ -1,5 +1,5 @@
-# VerifyAI — Production Readiness Audit Report (Phase 1)
-**Project**: VerifyAI — AI-Assisted Application Validation, Document Authentication & Regulatory Scrutiny System  
+# AICTE-Drishti — Production Readiness Audit Report (Phase 1)
+**Project**: AICTE-Drishti — AI-Assisted Application Validation, Document Authentication & Regulatory Scrutiny System  
 **Repository Path**: `D:\VerifyAI`  
 **Audit Date**: October 25, 2026  
 **Auditor**: Antigravity Technical Assessment Team  
@@ -12,7 +12,7 @@
 
 ### Current Classification: **Functional Prototype / Internal Pilot Candidate with Severe Security Blockers**
 
-VerifyAI exhibits impressive domain-aligned architectural foundations, featuring a coherent end-to-end institutional workflow (Intake → Scrutiny Engine → Rule Evaluation → Deficiency Handling → Officer Decision → Audit Trail) and a clean, responsive TypeScript/React officer workspace.
+AICTE-Drishti exhibits impressive domain-aligned architectural foundations, featuring a coherent end-to-end institutional workflow (Intake → Scrutiny Engine → Rule Evaluation → Deficiency Handling → Officer Decision → Audit Trail) and a clean, responsive TypeScript/React officer workspace.
 
 However, **it is NOT production-ready** and **cannot be deployed to an institutional environment** in its current state. The application currently functions under demonstration/prototype security assumptions:
 
@@ -39,7 +39,7 @@ However, **it is NOT production-ready** and **cannot be deployed to an instituti
 
 ### 2.1 Repository Architecture
 
-VerifyAI is structured as a decoupled full-stack application:
+AICTE-Drishti is structured as a decoupled full-stack application:
 - **Frontend** (`/frontend`): Single-page application built with React 19, TypeScript, Vite, Tailwind CSS, Lucide icons, and Axios. Organized around an AICTE Officer Workspace (Dashboard, Application Intake, Application Queue, Detail/Scrutiny Workspace, and Admin Configuration).
 - **Backend** (`/backend`): FastAPI (Python 3.12+) application structured into modular routers (`app/api`), SQLAlchemy ORM models (`app/models`), Pydantic validation schemas (`app/schemas`), and core domain services (`app/services`).
 - **Database**: SQLite (`backend/verifyai.db`) accessed via SQLAlchemy 2.0 with WAL mode enabled.
@@ -341,7 +341,7 @@ def verify_hash_chain_integrity(db: Session = Depends(get_db)):
 
 ## 6. Existing Functionality That Must Be Preserved
 
-VerifyAI contains high-value domain logic that should be preserved and reinforced rather than rewritten:
+AICTE-Drishti contains high-value domain logic that should be preserved and reinforced rather than rewritten:
 
 1. **Regulatory Scrutiny Rule Engine (`compliance_rules.py`)**:
    - The declarative YAML structure mapping APH clauses to deficiency codes, severity levels, and automated formulas is clean, maintainable, and accurate to official guidelines.
@@ -360,7 +360,7 @@ VerifyAI contains high-value domain logic that should be preserved and reinforce
 
 ```mermaid
 gantt
-    title VerifyAI Production Remediation Roadmap
+    title AICTE-Drishti Production Remediation Roadmap
     dateFormat  YYYY-MM-DD
     section P0: Release Blockers
     JWT / Session Authentication & RBAC       :crit, p0_1, 2026-11-01, 7d

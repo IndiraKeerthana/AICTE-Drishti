@@ -1,4 +1,4 @@
-# VerifyAI — System Architecture & Technical Specification
+# AICTE-Drishti — System Architecture & Technical Specification
 **AICTE Application Intelligence & Regulatory Verification Platform**  
 *Smart India Hackathon 2026 | Problem Statement 26261*
 
@@ -6,7 +6,7 @@
 
 ## 1. High-Level Architectural Design
 
-VerifyAI is structured as a decoupled, modular service architecture comprising a modern TypeScript/React single-page application (SPA), an asynchronous Python FastAPI application server, an embedded relational data store (SQLite/SQLAlchemy), a multi-tiered document processing pipeline (PyMuPDF + Tesseract OCR), a versioned YAML regulatory rules engine, and simulated external integration adapters.
+AICTE-Drishti is structured as a decoupled, modular service architecture comprising a modern TypeScript/React single-page application (SPA), an asynchronous Python FastAPI application server, an embedded relational data store (SQLite/SQLAlchemy), a multi-tiered document processing pipeline (PyMuPDF + Tesseract OCR), a versioned YAML regulatory rules engine, and simulated external integration adapters.
 
 ### 1.1 Architecture Diagram
 
@@ -112,7 +112,7 @@ sequenceDiagram
     autonumber
     actor Officer as AICTE Scrutiny Officer
     actor Applicant as Institutional Applicant
-    participant UI as VerifyAI Frontend
+    participant UI as AICTE-Drishti Frontend
     participant API as FastAPI OpenAPI Gateway
     participant IDP as IDP & Anomaly Engine
     participant DB as SQLite DB & Hash Chain

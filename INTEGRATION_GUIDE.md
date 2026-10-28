@@ -1,4 +1,4 @@
-# VerifyAI — Portal Integration Guide & API Contract
+# AICTE-Drishti — Portal Integration Guide & API Contract
 
 > **CRITICAL DISCLAIMER**:
 > **DEMO INTEGRATION — NOT CONNECTED TO AICTE PRODUCTION**
@@ -8,7 +8,7 @@
 
 ## 1. Overview & Architecture
 
-VerifyAI provides a dedicated integration layer (`/api/integration/v1/...`) that abstracts the internal automatic scrutiny engine from external state and central AICTE portals.
+AICTE-Drishti provides a dedicated integration layer (`/api/integration/v1/...`) that abstracts the internal automatic scrutiny engine from external state and central AICTE portals.
 
 This enables external portals to:
 1. Dispatch asynchronous application intake events (`POST /api/integration/v1/applications`).
@@ -58,8 +58,8 @@ All requests to `/api/integration/v1/...` require standard HTTP headers:
 
 | Header Name | Type | Required | Description |
 |---|---|---|---|
-| `X-Integration-Key` | String | **Yes** | Client secret key configured in VerifyAI backend (`INTEGRATION_API_KEY`). Prototype default: `verifyai-integration-demo-key-2026`. |
-| `X-Correlation-ID` | String | No | Unique distributed tracing identifier. If omitted, VerifyAI automatically generates a UUIDv4. |
+| `X-Integration-Key` | String | **Yes** | Client secret key configured in AICTE-Drishti backend (`INTEGRATION_API_KEY`). Prototype default: `verifyai-integration-demo-key-2026`. |
+| `X-Correlation-ID` | String | No | Unique distributed tracing identifier. If omitted, AICTE-Drishti automatically generates a UUIDv4. |
 | `X-Idempotency-Key` | String | Recommended | Unique client request identifier preventing duplicate processing on retries. |
 
 If `X-Integration-Key` is missing or invalid, the API immediately returns `HTTP 401 Unauthorized`:
@@ -196,8 +196,8 @@ If `X-Integration-Key` is missing or invalid, the API immediately returns `HTTP 
 
 ## 4. Local Integration Simulator Instructions
 
-An interactive, live Integration Simulator is built directly into the VerifyAI UI:
-1. Open the VerifyAI web interface at `http://localhost:5173`.
+An interactive, live Integration Simulator is built directly into the AICTE-Drishti UI:
+1. Open the AICTE-Drishti web interface at `http://localhost:5173`.
 2. Click **Integration Simulator** on the sidebar.
 3. Observe the prominent yellow banner: `DEMO INTEGRATION — NOT CONNECTED TO AICTE PRODUCTION`.
 4. In Tab 1 (**Submit App**), click **Dispatch Application Submission Event**.
@@ -215,4 +215,4 @@ To transition this adapter from the local demonstration simulator to a live AICT
 2. **Mutual TLS (mTLS)**: Replacement of shared header API keys with bilateral X.509 client certificate authentication.
 3. **Portal Secret Rotation**: Storage of credentials in hardware security modules (HSM) or enterprise secret managers (e.g., GCP Secret Manager / Vault).
 4. **Permanent Storage Migration**: Migration from SQLite to high-availability PostgreSQL with read replicas and point-in-time recovery.
-5. **Private Subnet / VPN Peering**: AICTE portal and VerifyAI instances hosted in isolated VPCs with no public internet ingress.
+5. **Private Subnet / VPN Peering**: AICTE portal and AICTE-Drishti instances hosted in isolated VPCs with no public internet ingress.

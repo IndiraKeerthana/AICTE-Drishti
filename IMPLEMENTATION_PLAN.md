@@ -1,4 +1,4 @@
-# VerifyAI — Implementation Plan & Roadmap
+# AICTE-Drishti — Implementation Plan & Roadmap
 **AICTE Application Intelligence & Regulatory Verification Platform**  
 *Smart India Hackathon 2026 | Problem Statement 26261*
 

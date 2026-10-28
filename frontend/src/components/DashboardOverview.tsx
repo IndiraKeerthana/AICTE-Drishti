@@ -193,7 +193,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           <div className="space-y-1">
             <div className="flex items-center space-x-2">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
-              <h2 className="text-base font-bold text-white">Welcome, AICTE Official</h2>
+              <h2 className="text-base font-bold text-white">Welcome, Officer</h2>
               <span className="text-xs bg-blue-500/20 text-blue-300 font-semibold px-2 py-0.5 rounded border border-blue-400/30">
                 Scrutiny & Approval Division
               </span>

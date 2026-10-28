@@ -6,7 +6,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 ROOT_DIR = BASE_DIR.parent
 
 class Settings(BaseSettings):
-    APP_NAME: str = "VerifyAI — AICTE Application Intelligence Platform"
+    APP_NAME: str = "AICTE-Drishti — AICTE Application Intelligence Platform"
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
     PORT: int = 8000

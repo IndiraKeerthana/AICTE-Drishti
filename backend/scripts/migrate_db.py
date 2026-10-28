@@ -1,5 +1,5 @@
 """
-VerifyAI Database Migration Script
+AICTE-Drishti Database Migration Script
 Inspects SQLite verifyai.db and dynamically adds missing columns to match current models.
 """
 import sqlite3

@@ -53,11 +53,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <ShieldCheck className="w-6 h-6" />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="font-extrabold text-base tracking-tight text-white flex items-center gap-1.5">
-              <span>VerifyAI</span>
-              <span className="text-[10px] bg-blue-500/20 text-blue-300 font-semibold px-1.5 py-0.5 rounded border border-blue-400/30">
-                AICTE
-              </span>
+            <div className="font-extrabold text-base tracking-tight text-white flex items-center">
+              <span className="truncate">AICTE-Drishti</span>
             </div>
             <p className="text-xs text-slate-400 font-medium truncate">Scrutiny & Approval System</p>
           </div>
@@ -113,11 +110,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* User Session Info Card */}
         <div className="px-3 py-2.5 bg-slate-800/50 rounded-lg border border-slate-800 flex items-center gap-3">
           <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-[11px] font-bold text-white shrink-0">
-            AO
+            O
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-xs font-bold text-slate-200 truncate">
-              {currentUser.full_name || 'AICTE Official'}
+              {currentUser.full_name || 'Officer'}
             </p>
             <p className="text-[10px] text-slate-400 truncate">
               {currentUser.designation || 'Scrutiny & Approval Officer'}

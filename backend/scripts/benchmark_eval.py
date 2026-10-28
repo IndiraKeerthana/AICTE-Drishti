@@ -1,5 +1,5 @@
 """
-VerifyAI - Benchmark Evaluation & Metric Calculation Script
+AICTE-Drishti - Benchmark Evaluation & Metric Calculation Script
 Executes real automated evaluation against curated ground truth fixtures and synthetic records.
 Measures:
 - Precision, Recall, F1 for Defect & Anomaly Detection
@@ -40,7 +40,7 @@ def create_sample_pdf(content: str) -> bytes:
 
 def run_benchmark():
     print("=" * 60)
-    print("Starting VerifyAI Scrutiny Engine Benchmark Evaluation")
+    print("Starting AICTE-Drishti Scrutiny Engine Benchmark Evaluation")
     print("=" * 60)
 
     init_db()

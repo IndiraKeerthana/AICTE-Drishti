@@ -144,7 +144,7 @@ export const FinalDecisionModal: React.FC<FinalDecisionModalProps> = ({
           </div>
 
           <div className="p-3 bg-blue-50/80 border border-blue-200 rounded-lg text-[11px] text-blue-900 leading-relaxed">
-            <strong>Human Authority Assurance:</strong> VerifyAI automated scrutiny assists by extracting, comparing, and flagging evidence. The final approval or rejection is recorded solely under statutory human authorization.
+            <strong>Human Authority Assurance:</strong> AICTE-Drishti automated scrutiny assists by extracting, comparing, and flagging evidence. The final approval or rejection is recorded solely under statutory human authorization.
           </div>
 
           <div className="flex items-center justify-end space-x-3 pt-3 border-t border-slate-200">

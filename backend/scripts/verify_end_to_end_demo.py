@@ -11,7 +11,7 @@ from app.main import app
 
 def run_10_step_demo():
     print("=" * 70)
-    print("VERIFYAI - SIH 2026 SCREENING DEMONSTRATION VERIFICATION SCRIPT")
+    print("AICTE-DRISHTI - SIH 2026 SCREENING DEMONSTRATION VERIFICATION SCRIPT")
     print("=" * 70)
 
     client = TestClient(app)

@@ -1,4 +1,4 @@
-# VerifyAI — SIH 2026 Demonstration Readiness & Technical Report
+# AICTE-Drishti — SIH 2026 Demonstration Readiness & Technical Report
 
 **Problem Statement 26261:** AI-Powered Application Validation, Document Authentication and Regulatory Compliance Verification  
 **Target User Persona:** Non-technical AICTE Government Scrutiny & Approval Official  
@@ -10,7 +10,7 @@
 
 ## 1. Executive Summary & Product Philosophy
 
-VerifyAI is an administrative decision-support system designed to assist authorised AICTE officers in application scrutiny. It is not an automated replacement for the AICTE portal, and automated verification checks never independently approve or reject an application.
+AICTE-Drishti is an administrative decision-support system designed to assist authorised AICTE officers in application scrutiny. It is not an automated replacement for the AICTE portal, and automated verification checks never independently approve or reject an application.
 
 The application addresses five fundamental administrative questions without requiring technical or programming expertise:
 
@@ -23,7 +23,7 @@ The application addresses five fundamental administrative questions without requ
    - **Area C** organizes checks into three distinct groups: *Documents still required* (with explicit workflow blocking notices), *Checks that need attention* (distinguishing confirmed discrepancies from possible anomalies or incomplete checks), and *Requirements completed*.
 4. **What evidence supports each finding?**
    - Each finding card explains what was checked, what was found, expected vs observed values, why the difference matters, and what remains uncertain.
-   - An **"Inspect Document (Page X)"** action opens the attachment in an in-app viewer (PDF streaming directly to `#page=N` or image inspection with 60%–200% zoom controls) without leaving VerifyAI.
+   - An **"Inspect Document (Page X)"** action opens the attachment in an in-app viewer (PDF streaming directly to `#page=N` or image inspection with 60%–200% zoom controls) without leaving AICTE-Drishti.
 5. **What action should I take next?**
    - **Area E** provides dedicated administrative actions: *Request Additional Information (Deficiency Notice)*, *Send for Re-Scrutiny*, and *Record Statutory Decision* (requiring justification remarks).
 
@@ -31,7 +31,7 @@ The application addresses five fundamental administrative questions without requ
 
 ## 2. Mock External-Authority Cross-Verification & Section 10 Outcomes
 
-Because live government issuing authority registries are inaccessible during the hackathon, VerifyAI implements a synthetic authority registry with clear disclosures:
+Because live government issuing authority registries are inaccessible during the hackathon, AICTE-Drishti implements a synthetic authority registry with clear disclosures:
 
 > **SIMULATED EXTERNAL CHECK — SYNTHETIC DATA**
 
@@ -159,7 +159,7 @@ npm run build
 ```
 **Actual Result:**
 ```
-> verifyai-frontend@1.0.0 build
+> aicte-drishti-frontend@1.0.0 build
 > tsc && vite build
 
 vite v5.4.21 building for production...
@@ -264,5 +264,5 @@ npm run dev
 - Web Application URL: `http://localhost:5173`
 
 ---
-*VerifyAI — AI flags and explains. The authorised officer decides.*
+*AICTE-Drishti — AI flags and explains. The authorised officer decides.*
 

@@ -28,7 +28,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title=settings.APP_NAME,
-    description="Automated Preliminary Scrutiny, Document Authentication & Evidence-Linked Verification Platform for AICTE",
+    description="AICTE-Drishti: AI-powered application scrutiny, document verification and regulatory compliance support.",
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",

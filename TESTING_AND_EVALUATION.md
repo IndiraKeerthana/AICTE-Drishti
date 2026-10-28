@@ -1,8 +1,8 @@
-# VerifyAI — Testing, Evaluation & Benchmarking Report
+# AICTE-Drishti — Testing, Evaluation & Benchmarking Report
 
 ## 1. Automated Test Suite Overview
 
-VerifyAI maintains an automated test suite executed via `pytest`. All tests execute against isolated SQLite instances and validate core scrutiny, verification, and integration contracts.
+AICTE-Drishti maintains an automated test suite executed via `pytest`. All tests execute against isolated SQLite instances and validate core scrutiny, verification, and integration contracts.
 
 ### Test Results Summary
 - **Test Runner**: `pytest v9.1.1` on Python 3.13.14 (win32)

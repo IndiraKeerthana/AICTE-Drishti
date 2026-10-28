@@ -1,4 +1,4 @@
-# VerifyAI — UI Review & Targeted Improvement Plan
+# AICTE-Drishti — UI Review & Targeted Improvement Plan
 **Target User:** Senior, Non-Technical AICTE Scrutiny Officer  
 **Evaluation Context:** SIH 2026 External Screening Tonight  
 **File Path:** `D:\VerifyAI\UI_REVIEW_AND_IMPROVEMENT_PLAN.md`  
@@ -8,7 +8,7 @@
 
 ## Executive Summary & Audit Overview
 
-The existing VerifyAI frontend is built with **React 18 + Vite + Tailwind CSS + Lucide Icons**. It already has a strong, dignified, institutional visual foundation that closely reflects official AICTE portals, utilizing a clean palette of slate neutrals, AICTE navy blues, emerald verification greens, and amber review alerts.
+The existing AICTE-Drishti frontend is built with **React 18 + Vite + Tailwind CSS + Lucide Icons**. It already has a strong, dignified, institutional visual foundation that closely reflects official AICTE portals, utilizing a clean palette of slate neutrals, AICTE navy blues, emerald verification greens, and amber review alerts.
 
 The application has several working features:
 1. Operational dashboard indicators and compact triage alerts.
@@ -237,4 +237,4 @@ The application has several working features:
 
 ## Conclusion
 
-The existing VerifyAI application has all the required backend data models, scrutiny pipelines, and officer workflow states. By keeping the current design system intact and focusing on **in-app document inspection, plain-language translations, alert deep-linking, priority ranking, and the mandatory AICTE safety footer**, the platform will provide an impressive, trustworthy experience for the senior scrutiny officer during tonight's screening.
+The existing AICTE-Drishti application has all the required backend data models, scrutiny pipelines, and officer workflow states. By keeping the current design system intact and focusing on **in-app document inspection, plain-language translations, alert deep-linking, priority ranking, and the mandatory AICTE safety footer**, the platform will provide an impressive, trustworthy experience for the senior scrutiny officer during tonight's screening.

@@ -2118,7 +2118,7 @@ export const ApplicationDetails: React.FC<ApplicationDetailsProps> = ({
             </div>
           </div>
           <span className="text-xs text-slate-300">
-            Authorised Official: <strong>AICTE Official</strong>
+            Authorised Official: <strong>{currentUser?.full_name || 'Officer'}</strong>
           </span>
         </div>
 

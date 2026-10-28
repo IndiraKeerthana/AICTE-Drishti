@@ -245,7 +245,7 @@ export const BenchmarkViewer: React.FC = () => {
                   <span className="font-bold text-slate-800">45 minutes / application</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>VerifyAI Automated Scrutiny Engine:</span>
+                  <span>AICTE-Drishti Automated Scrutiny Engine:</span>
                   <span className="font-bold text-blue-700">~2.8 seconds / application</span>
                 </div>
                 <div className="flex justify-between border-t border-blue-200 pt-1 text-slate-700">

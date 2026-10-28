@@ -1,1 +1,1 @@
-# VerifyAI Backend Application Package
+# AICTE-Drishti Backend Application Package

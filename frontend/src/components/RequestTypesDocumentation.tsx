@@ -430,7 +430,7 @@ export const RequestTypesDocumentation: React.FC = () => {
                                                                                                   Automated Scrutiny Rules Evaluated ({activeRules.length})
                                                                                                 </h4>
                                                                                                 <p className="text-[11px] text-slate-500">
-                                                                                                  Compliance checks automatically executed by VerifyAI for applications in this category.
+                                                                                                  Compliance checks automatically executed by AICTE-Drishti for applications in this category.
                                                                                                 </p>
                                                                                             </div>
                                                                                             <span className="text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded">

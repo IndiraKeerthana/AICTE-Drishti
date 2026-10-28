@@ -1,6 +1,6 @@
-# VerifyAI — AI & Intelligence Modules Technical Specification
+# AICTE-Drishti — AI & Intelligence Modules Technical Specification
 
-VerifyAI integrates six specialized intelligence and verification modules into a unified, automatic scrutiny pipeline. This document specifies the implementation details, libraries, deterministic heuristics, and operational boundaries of each module.
+AICTE-Drishti integrates six specialized intelligence and verification modules into a unified, automatic scrutiny pipeline. This document specifies the implementation details, libraries, deterministic heuristics, and operational boundaries of each module.
 
 ---
 
