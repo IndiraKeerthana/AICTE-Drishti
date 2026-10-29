@@ -14,7 +14,7 @@ from app.schemas import (
 )
 from app.api.auth import get_current_user, require_role, UserInfo
 from app.services.baseline_service import ensure_baseline_records, get_institution_baseline
-from app.services.orchestrator import execute_automated_scrutiny
+from app.services.orchestrator import execute_automated_scrutiny, upsert_finding
 from app.services.compliance_rules import compliance_engine
 
 router = APIRouter(prefix="/applications", tags=["Applications"])
@@ -186,7 +186,7 @@ def get_application(
 
     # Format document previews
     doc_responses = []
-    for doc in active_docs_list:
+    for doc in app.documents:
         preview = (doc.extracted_text[:200] + "...") if doc.extracted_text and len(doc.extracted_text) > 200 else doc.extracted_text
         doc_responses.append({
             "id": doc.id,
@@ -361,6 +361,53 @@ def get_application(
             stream_url=f"/api/documents/{doc.id}/stream" if doc else None
         ))
 
+    # Active Deficiency Notice
+    active_deficiency_notice = None
+    if app.status == "DEFICIENCY_FLAGGED" or any(f.review_status == "RECTIFICATION_REQUESTED" for f in app.findings):
+        last_action = db.query(ReviewerAction).filter(
+            ReviewerAction.application_id == app.id,
+            ReviewerAction.action_type == "REQUEST_DEFICIENCY"
+        ).order_by(ReviewerAction.created_at.desc()).first()
+
+        last_audit = db.query(AuditEvent).filter(
+            AuditEvent.application_id == app.id,
+            AuditEvent.event_type == "DEFICIENCY_NOTICE_ISSUED"
+        ).order_by(AuditEvent.created_at.desc()).first()
+
+        req_cats = []
+        if last_audit:
+            try:
+                ad = json.loads(last_audit.details_json)
+                req_cats = ad.get("document_categories") or []
+            except Exception:
+                pass
+
+        rect_finding_ids = [f.id for f in app.findings if f.review_status == "RECTIFICATION_REQUESTED"]
+
+        if last_action:
+            active_deficiency_notice = {
+                "is_active": True,
+                "instructions": last_action.justification_remarks,
+                "issued_by": last_action.reviewer_name,
+                "issued_at": last_action.created_at,
+                "requested_categories": req_cats,
+                "finding_ids": rect_finding_ids
+            }
+        elif last_audit:
+            try:
+                ad = json.loads(last_audit.details_json)
+                inst = ad.get("instructions", "Rectification requested by scrutiny officer.")
+            except Exception:
+                inst = "Rectification requested by scrutiny officer."
+            active_deficiency_notice = {
+                "is_active": True,
+                "instructions": inst,
+                "issued_by": last_audit.actor,
+                "issued_at": last_audit.created_at,
+                "requested_categories": req_cats,
+                "finding_ids": rect_finding_ids
+            }
+
     # Build Section C: Grouped Scrutiny Report
     grouped_report = ScrutinyReportGrouped()
     if latest_run and latest_run.check_results:
@@ -411,6 +458,7 @@ def get_application(
         "baseline_record": baseline,
         "document_checklist": checklist_items,
         "grouped_scrutiny_report": grouped_report,
+        "active_deficiency_notice": active_deficiency_notice,
         "created_at": app.created_at,
         "updated_at": app.updated_at,
     }
@@ -437,17 +485,68 @@ def issue_deficiency_notice(
             detail=f"Application has already been finalized ({app.final_decision or app.status}). Return application to review before issuing new deficiency notices."
         )
 
-    selected_findings = db.query(Finding).filter(
-        Finding.application_id == app.id,
-        Finding.id.in_(payload.finding_ids)
-    ).all()
+    finding_ids = payload.finding_ids or []
+    document_categories = payload.document_categories or []
 
-    if not selected_findings:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Please select at least one finding for correction.")
+    if not finding_ids and not document_categories:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Please select at least one finding or document category for correction."
+        )
 
-    officer_name = payload.officer_name or current_user.full_name or "Scrutiny Officer"
+    officer_name = payload.officer_name or current_user.full_name or "Officer"
+    target_findings = []
 
-    for f in selected_findings:
+    # 1. Fetch any findings directly requested by finding_ids
+    if finding_ids:
+        found = db.query(Finding).filter(
+            Finding.application_id == app.id,
+            Finding.id.in_(finding_ids)
+        ).all()
+        target_findings.extend(found)
+
+    # 2. For requested document categories, link or create deficiency findings
+    for cat in document_categories:
+        cat_finding = None
+        for f in app.findings:
+            if f.supporting_document and f.supporting_document.document_category == cat:
+                cat_finding = f
+                break
+            elif cat in f.finding_code:
+                cat_finding = f
+                break
+
+        if cat_finding:
+            if cat_finding not in target_findings:
+                target_findings.append(cat_finding)
+        else:
+            doc_obj = db.query(Document).filter(
+                Document.application_id == app.id,
+                Document.document_category == cat,
+                Document.status != "REPLACED_ARCHIVED"
+            ).first()
+            new_fnd = upsert_finding(
+                db=db,
+                app_id=app.id,
+                run_id=None,
+                code=f"FND-DEFICIENCY-{cat}-{app.id}",
+                category="MISSING_DOCUMENT" if not doc_obj else "RECORD_MISMATCH",
+                severity="HIGH",
+                title=f"Deficiency Notice: {cat.replace('_', ' ').title()}",
+                desc=payload.instructions,
+                exp=f"Valid statutory document for {cat.replace('_', ' ').title()}",
+                obs="Replacement or correction requested by scrutiny officer",
+                rule_code=f"APH-DEFICIENCY-{cat}",
+                rule_desc=f"Document compliance deficiency noted by officer for {cat}.",
+                rec_action="Upload replacement statutory document in requested category.",
+                doc_id=doc_obj.id if doc_obj else None,
+                page_num=1 if doc_obj else None,
+                evidence_class="VERIFIED_FACT"
+            )
+            if new_fnd not in target_findings:
+                target_findings.append(new_fnd)
+
+    for f in target_findings:
         f.review_status = "RECTIFICATION_REQUESTED"
         f.resolution_notes = payload.instructions
 
@@ -468,8 +567,13 @@ def issue_deficiency_notice(
         Alert.alert_type == "DEFICIENCY_NOTICE",
         Alert.status.in_(["ACTIVE", "ACKNOWLEDGED"])
     ).first()
+
+    notice_msg = f"{officer_name} requested corrections: {payload.instructions}"
+    if document_categories:
+        notice_msg += f" (Categories: {', '.join(document_categories)})"
+
     if existing_alert:
-        existing_alert.message = f"{officer_name} requested corrections: {payload.instructions}"
+        existing_alert.message = notice_msg
         existing_alert.severity = "Action required"
     else:
         alert = Alert(
@@ -477,7 +581,7 @@ def issue_deficiency_notice(
             alert_type="DEFICIENCY_NOTICE",
             severity="Action required",
             title=f"Deficiency Notice Issued ({app.application_number})",
-            message=f"{officer_name} requested corrections: {payload.instructions}",
+            message=notice_msg,
             status="ACTIVE"
         )
         db.add(alert)
@@ -488,8 +592,9 @@ def issue_deficiency_notice(
         application_id=app.id,
         event_type="DEFICIENCY_NOTICE_ISSUED",
         details={
-            "finding_count": len(selected_findings),
-            "finding_codes": [f.finding_code for f in selected_findings],
+            "finding_count": len(target_findings),
+            "finding_codes": [f.finding_code for f in target_findings],
+            "document_categories": document_categories,
             "instructions": payload.instructions,
             "officer": officer_name
         },
@@ -498,9 +603,11 @@ def issue_deficiency_notice(
 
     db.commit()
     return {
-        "message": f"Deficiency notice successfully issued with {len(selected_findings)} required corrections.",
+        "message": f"Deficiency notice successfully issued with {len(target_findings)} required corrections.",
         "application_number": app.application_number,
-        "status": app.status
+        "status": app.status,
+        "requested_categories": document_categories,
+        "finding_ids": [f.id for f in target_findings]
     }
 
 

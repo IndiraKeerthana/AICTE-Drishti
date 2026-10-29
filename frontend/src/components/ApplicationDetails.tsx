@@ -460,6 +460,12 @@ export const ApplicationDetails: React.FC<ApplicationDetailsProps> = ({
     verificationStatus?: string | null;
     verificationEvidence?: string | null;
     supportingSnippet?: string | null;
+    documentId?: number | null;
+    boundingBox?: string | null;
+    secondaryDocumentId?: number | null;
+    secondaryDocumentName?: string | null;
+    secondaryPageNumber?: number | null;
+    secondaryStreamUrl?: string | null;
   } | null>(null);
 
   // Replacement / resubmission state
@@ -515,17 +521,35 @@ export const ApplicationDetails: React.FC<ApplicationDetailsProps> = ({
       verification_source?: string | null;
       verification_evidence?: string | null;
       extracted_summary?: string | null;
+      bounding_box?: string | null;
+      secondary_document_id?: number | null;
+      secondary_document_name?: string | null;
+      secondary_page_number?: number | null;
+      secondary_stream_url?: string | null;
     },
     pageNumber: number = 1,
     snippet?: string | null
   ) => {
-    if (!item.stream_url) return;
-    const fullDoc = application.documents?.find((d) => d.id === item.document_id);
+    const docId = item.document_id;
+    const fullDoc = application.documents?.find((d) => d.id === docId);
+    const resolvedStreamUrl =
+      item.stream_url ||
+      (docId ? `/api/documents/${docId}/stream` : null) ||
+      (fullDoc ? `/api/documents/${fullDoc.id}/stream` : null);
+    if (!resolvedStreamUrl) return;
+
+    const secondaryDoc = item.secondary_document_id
+      ? application.documents?.find((d) => d.id === item.secondary_document_id)
+      : null;
+    const secondaryStreamUrl =
+      item.secondary_stream_url ||
+      (item.secondary_document_id ? `/api/documents/${item.secondary_document_id}/stream` : null);
+
     setActivePreviewDoc({
       isOpen: true,
       title: item.original_filename || item.document_name || fullDoc?.original_filename || 'Submitted Attachment',
       category: item.category_code || fullDoc?.document_category,
-      streamUrl: item.stream_url,
+      streamUrl: resolvedStreamUrl,
       mimeType: fullDoc?.mime_type || 'application/pdf',
       pageCount: fullDoc?.page_count || 1,
       initialPage: pageNumber,
@@ -534,6 +558,12 @@ export const ApplicationDetails: React.FC<ApplicationDetailsProps> = ({
       verificationStatus: item.status || null,
       verificationEvidence: item.verification_evidence || null,
       supportingSnippet: snippet || null,
+      documentId: docId || fullDoc?.id || null,
+      boundingBox: item.bounding_box || null,
+      secondaryDocumentId: item.secondary_document_id || null,
+      secondaryDocumentName: item.secondary_document_name || secondaryDoc?.original_filename || null,
+      secondaryPageNumber: item.secondary_page_number || 1,
+      secondaryStreamUrl: secondaryStreamUrl,
     });
   };
 
@@ -1482,7 +1512,7 @@ export const ApplicationDetails: React.FC<ApplicationDetailsProps> = ({
                                   handleOpenDocPreview(
                                     {
                                       document_id: fullDoc.id,
-                                      stream_url: `/api/applications/${application.id}/documents/${fullDoc.id}/raw`,
+                                      stream_url: `/api/documents/${fullDoc.id}/stream`,
                                       original_filename: fullDoc.original_filename,
                                       category_code: fullDoc.document_category,
                                     },
@@ -1568,7 +1598,7 @@ export const ApplicationDetails: React.FC<ApplicationDetailsProps> = ({
                               handleOpenDocPreview(
                                 {
                                   document_id: fullDoc.id,
-                                  stream_url: `/api/applications/${application.id}/documents/${fullDoc.id}/raw`,
+                                  stream_url: `/api/documents/${fullDoc.id}/stream`,
                                   original_filename: fullDoc.original_filename,
                                   category_code: fullDoc.document_category,
                                 },
@@ -1887,6 +1917,11 @@ export const ApplicationDetails: React.FC<ApplicationDetailsProps> = ({
                                           verification_source: item.finding.evidence?.verification_source || item.chk?.verification_source,
                                           verification_evidence: item.finding.evidence?.verification_evidence || item.chk?.verification_evidence,
                                           extracted_summary: item.chk?.extracted_summary,
+                                          bounding_box: item.finding.bounding_box,
+                                          secondary_document_id: item.finding.secondary_document_id,
+                                          secondary_document_name: item.finding.secondary_document_name,
+                                          secondary_page_number: item.finding.secondary_page_number,
+                                          secondary_stream_url: item.finding.secondary_document_id ? `/api/documents/${item.finding.secondary_document_id}/stream` : null,
                                         },
                                         item.finding.supporting_page_number || 1,
                                         item.finding.observed_value || item.finding.description
@@ -1901,6 +1936,34 @@ export const ApplicationDetails: React.FC<ApplicationDetailsProps> = ({
                                   </button>
                                 ) : (
                                   <span className="text-[11px] text-slate-400 italic">No document file attached</span>
+                                )}
+
+                                {item.finding?.secondary_document_id && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleOpenDocPreview(
+                                        {
+                                          document_id: item.finding.secondary_document_id,
+                                          original_filename: item.finding.secondary_document_name || 'Comparison Document',
+                                          document_name: item.finding.secondary_document_name || 'Comparison Document',
+                                          stream_url: `/api/documents/${item.finding.secondary_document_id}/stream`,
+                                          secondary_document_id: item.doc?.id || item.chk?.document_id,
+                                          secondary_document_name: item.doc?.original_filename || item.chk?.original_filename || 'Primary Document',
+                                          secondary_page_number: item.finding.supporting_page_number || 1,
+                                          secondary_stream_url: item.streamUrl,
+                                        },
+                                        item.finding.secondary_page_number || 1,
+                                        item.finding.expected_value || item.finding.description
+                                      )
+                                    }
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 font-semibold text-xs border border-amber-300 shadow-xs transition-colors ml-2"
+                                  >
+                                    <Eye className="w-3.5 h-3.5 text-amber-600" />
+                                    <span>
+                                      Inspect Comparison Doc {item.finding.secondary_page_number ? `(Page ${item.finding.secondary_page_number})` : ''}
+                                    </span>
+                                  </button>
                                 )}
 
                                 <div className="flex items-center gap-2 ml-auto">
@@ -1993,7 +2056,7 @@ export const ApplicationDetails: React.FC<ApplicationDetailsProps> = ({
                                       if (fullDoc) {
                                         handleOpenDocPreview({
                                           document_id: fullDoc.id,
-                                          stream_url: `/api/applications/${application.id}/documents/${fullDoc.id}/raw`,
+                                          stream_url: `/api/documents/${fullDoc.id}/stream`,
                                           original_filename: fullDoc.original_filename,
                                           category_code: fullDoc.document_category,
                                         });
@@ -2078,7 +2141,7 @@ export const ApplicationDetails: React.FC<ApplicationDetailsProps> = ({
                                     if (fullDoc) {
                                       handleOpenDocPreview({
                                         document_id: fullDoc.id,
-                                        stream_url: `/api/applications/${application.id}/documents/${fullDoc.id}/raw`,
+                                        stream_url: `/api/documents/${fullDoc.id}/stream`,
                                         original_filename: fullDoc.original_filename,
                                         category_code: fullDoc.document_category,
                                       });
@@ -2217,6 +2280,12 @@ export const ApplicationDetails: React.FC<ApplicationDetailsProps> = ({
           verificationStatus={activePreviewDoc.verificationStatus}
           verificationEvidence={activePreviewDoc.verificationEvidence}
           supportingSnippet={activePreviewDoc.supportingSnippet}
+          documentId={activePreviewDoc.documentId}
+          boundingBox={activePreviewDoc.boundingBox}
+          secondaryDocumentId={activePreviewDoc.secondaryDocumentId}
+          secondaryDocumentName={activePreviewDoc.secondaryDocumentName}
+          secondaryPageNumber={activePreviewDoc.secondaryPageNumber}
+          secondaryStreamUrl={activePreviewDoc.secondaryStreamUrl}
         />
       )}
     </div>

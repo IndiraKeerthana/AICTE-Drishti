@@ -22,6 +22,20 @@ export interface BaselineRecord {
   created_at: string;
 }
 
+export interface ExtractedFieldItem {
+  id: number;
+  document_id: number;
+  field_key: string;
+  field_value: string;
+  normalized_value?: string | null;
+  confidence_score: number;
+  page_number: number;
+  source_snippet?: string | null;
+  bounding_box?: string | null;
+  extraction_method: string;
+  created_at: string;
+}
+
 export interface DocumentItem {
   id: number;
   application_id: number;
@@ -33,6 +47,9 @@ export interface DocumentItem {
   status: string;
   page_count: number;
   extracted_text_preview?: string;
+  extracted_text?: string | null;
+  stream_url?: string;
+  extracted_fields?: ExtractedFieldItem[];
   uploaded_at: string;
 }
 
@@ -95,8 +112,20 @@ export interface Finding {
   review_status: 'OPEN' | 'ACKNOWLEDGED' | 'RECTIFICATION_REQUESTED' | 'RESOLVED' | 'OVERRIDDEN';
   resolution_notes?: string;
   evidence_classification?: string;
+  secondary_document_id?: number;
+  secondary_page_number?: number;
+  secondary_document_name?: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface ActiveDeficiencyNotice {
+  is_active: boolean;
+  instructions: string;
+  issued_by: string;
+  issued_at: string;
+  requested_categories: string[];
+  finding_ids: number[];
 }
 
 export interface ReviewerAction {
@@ -186,6 +215,7 @@ export interface ApplicationDetail extends Application {
   document_checklist: DocumentChecklistItem[];
   grouped_scrutiny_report?: ScrutinyReportGrouped;
   latest_scrutiny_run?: ScrutinyRun;
+  active_deficiency_notice?: ActiveDeficiencyNotice;
 }
 
 export interface UserInfo {

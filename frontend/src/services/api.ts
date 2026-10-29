@@ -30,7 +30,7 @@ export function getSessionAuth() {
   return activeAuthHeaders;
 }
 
-function getHeaders(customHeaders?: Record<string, string>): Record<string, string> {
+export function getHeaders(customHeaders?: Record<string, string>): Record<string, string> {
   return {
     ...activeAuthHeaders,
     ...customHeaders,
@@ -102,6 +102,17 @@ export async function uploadDocument(
   return res.json();
 }
 
+export async function getDocumentDetails(documentId: number) {
+  const res = await fetch(`${API_BASE}/documents/${documentId}`, {
+    headers: getHeaders(),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || 'Failed to fetch document details');
+  }
+  return res.json();
+}
+
 export async function recordReviewerAction(
   findingId: number,
   data: {
@@ -125,7 +136,8 @@ export async function recordReviewerAction(
 export async function issueDeficiencyNotice(
   applicationId: number,
   data: {
-    finding_ids: number[];
+    finding_ids?: number[];
+    document_categories?: string[];
     instructions: string;
     officer_name?: string;
   }

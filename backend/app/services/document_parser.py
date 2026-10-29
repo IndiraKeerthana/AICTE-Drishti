@@ -148,7 +148,7 @@ def extract_document_content(
             for page_idx, page in enumerate(doc):
                 text = page.get_text("text") or ""
                 pages_text.append(text)
-                _extract_fields_from_page(text, page_idx + 1, extracted_fields, method="PYMUPDF")
+                _extract_fields_from_page(text, page_idx + 1, extracted_fields, method="PYMUPDF", page_obj=page)
 
             extracted_text = "\n--- Page Break ---\n".join(pages_text).strip()
 
@@ -269,59 +269,96 @@ def extract_document_content(
     }
 
 
-def _extract_fields_from_page(text: str, page_num: int, fields_list: list[dict], method: str):
-    """Applies robust regex extractors to identify key regulatory values."""
+def _extract_fields_from_page(text: str, page_num: int, fields_list: list[dict], method: str, page_obj=None):
+    """Applies robust regex extractors to identify key regulatory values and calculates genuine bounding box coordinates when page_obj is provided."""
     if not text:
         return
+
+    def _find_bbox(search_term: str):
+        if not page_obj or not search_term or not hasattr(page_obj, "search_for"):
+            return None
+        try:
+            rects = page_obj.search_for(search_term)
+            if rects:
+                r = rects[0]
+                pw = float(page_obj.rect.width) if hasattr(page_obj, "rect") else 595.0
+                ph = float(page_obj.rect.height) if hasattr(page_obj, "rect") else 842.0
+                return json.dumps({
+                    "x": round(float(r.x0), 2),
+                    "y": round(float(r.y0), 2),
+                    "width": round(float(r.width), 2),
+                    "height": round(float(r.height), 2),
+                    "page_width": round(pw, 2),
+                    "page_height": round(ph, 2),
+                })
+        except Exception:
+            return None
+        return None
 
     # 1. Intake numbers
     intake_match = re.search(r"(?:intake|approved intake|sanctioned intake|intake capacity|seats)[\s:=]*([0-9]{2,4})\b", text, re.IGNORECASE)
     if intake_match:
+        val = intake_match.group(1)
+        snippet = intake_match.group(0)
+        bbox = _find_bbox(val) or _find_bbox(snippet)
         fields_list.append({
             "field_key": "intake_capacity",
-            "field_value": intake_match.group(1),
-            "normalized_value": intake_match.group(1),
+            "field_value": val,
+            "normalized_value": val,
             "confidence_score": 0.95,
             "page_number": page_num,
-            "source_snippet": intake_match.group(0),
+            "source_snippet": snippet,
+            "bounding_box": bbox,
             "extraction_method": method
         })
 
     # 2. Land Area
     land_match = re.search(r"([0-9]+(?:\.[0-9]+)?)\s*(?:acres|acre|hectares|sq\.?\s*m(?:eters)?)", text, re.IGNORECASE)
     if land_match:
+        val = land_match.group(1)
+        snippet = land_match.group(0)
+        bbox = _find_bbox(snippet) or _find_bbox(val)
         fields_list.append({
             "field_key": "land_area",
-            "field_value": land_match.group(0),
-            "normalized_value": land_match.group(1),
+            "field_value": snippet,
+            "normalized_value": val,
             "confidence_score": 0.90,
             "page_number": page_num,
-            "source_snippet": land_match.group(0),
+            "source_snippet": snippet,
+            "bounding_box": bbox,
             "extraction_method": method
         })
 
     # 3. Expiry / Validity Dates
-    expiry_match = re.search(r"(?:valid up to|valid till|valid upto|expiry date|valid through)[\s.:]*([0-9]{1,2}[\/\-\.][0-9]{1,2}[\/\-\.][0-9]{2,4})", text, re.IGNORECASE)
+    expiry_match = re.search(r"(?:valid up to|valid till|valid upto|expiry date|valid through|expired on)[\s.:]*([0-9]{1,4}[\/\-\.][0-9]{1,2}[\/\-\.][0-9]{2,4})", text, re.IGNORECASE)
     if expiry_match:
+        val = expiry_match.group(1)
+        snippet = expiry_match.group(0)
+        bbox = _find_bbox(val) or _find_bbox(snippet)
         fields_list.append({
             "field_key": "expiry_date",
-            "field_value": expiry_match.group(1),
-            "normalized_value": expiry_match.group(1),
+            "field_value": val,
+            "normalized_value": val,
             "confidence_score": 0.92,
             "page_number": page_num,
-            "source_snippet": expiry_match.group(0),
+            "source_snippet": snippet,
+            "bounding_box": bbox,
             "extraction_method": method
         })
 
     # 4. Certificate / NOC Reference Numbers
     cert_match = re.search(r"(?:certificate no|cert no|ref no|order no|file no)[\s.:]*([A-Za-z0-9\/-]{5,30})", text, re.IGNORECASE)
     if cert_match:
+        val = cert_match.group(1)
+        snippet = cert_match.group(0)
+        bbox = _find_bbox(val) or _find_bbox(snippet)
         fields_list.append({
             "field_key": "certificate_number",
-            "field_value": cert_match.group(1),
-            "normalized_value": cert_match.group(1),
+            "field_value": val,
+            "normalized_value": val,
             "confidence_score": 0.88,
             "page_number": page_num,
-            "source_snippet": cert_match.group(0),
+            "source_snippet": snippet,
+            "bounding_box": bbox,
             "extraction_method": method
         })

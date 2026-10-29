@@ -23,7 +23,7 @@ def record_reviewer_action(
 
     # 1. Update finding review status based on action
     action_type = payload.action_type.upper()
-    valid_actions = {"ACKNOWLEDGE", "REQUEST_DEFICIENCY", "OVERRIDE", "RESOLVE"}
+    valid_actions = {"ACKNOWLEDGE", "REQUEST_DEFICIENCY", "OVERRIDE", "RESOLVE", "RECOMMEND_EVC", "ESCALATE_EVC"}
     if action_type not in valid_actions:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -38,6 +38,8 @@ def record_reviewer_action(
         finding.review_status = "OVERRIDDEN"
     elif action_type == "RESOLVE":
         finding.review_status = "RESOLVED"
+    elif action_type in ("RECOMMEND_EVC", "ESCALATE_EVC"):
+        finding.review_status = "EVC_RECOMMENDED"
 
     if action_type in ("RESOLVE", "OVERRIDE"):
         linked_alerts = db.query(Alert).filter(
@@ -47,6 +49,17 @@ def record_reviewer_action(
         ).all()
         for a in linked_alerts:
             a.status = "RESOLVED"
+    elif action_type in ("RECOMMEND_EVC", "ESCALATE_EVC"):
+        alert = Alert(
+            application_id=finding.application_id,
+            finding_id=finding.id,
+            alert_type="EVC_ESCALATION",
+            severity="Review required",
+            title=f"Expert Visit Committee (EVC) Recommended",
+            message=f"{payload.reviewer_name or 'Officer'} recommended on-site physical inspection by EVC: {payload.justification_remarks}",
+            status="ACTIVE"
+        )
+        db.add(alert)
 
     finding.resolution_notes = payload.justification_remarks
 

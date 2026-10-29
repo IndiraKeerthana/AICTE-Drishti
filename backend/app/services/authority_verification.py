@@ -17,6 +17,30 @@ except ImportError:
 # Clearly identified as synthetic mock records. Not connected to live authority databases.
 SIMULATED_AUTHORITY_REGISTRY = {
     # --- SCENARIO A: Valid Matching Records (VERIFIED) ---
+    "FS-2026-SARASWATI-01": {
+        "approval_ref": "FS-2026-SARASWATI-01",
+        "issuing_authority": "Municipal Directorate of Fire & Emergency Services",
+        "approval_type": "FIRE_SAFETY_NOC",
+        "institution_name": "Saraswati College of Engineering & Technology",
+        "approved_location": "Survey 104/2A, Kothrud, Pune, Maharashtra",
+        "issue_date": "2025-06-01",
+        "valid_till": "2027-06-30",
+        "status": "ACTIVE",
+        "status_reason": "Regular periodic inspection completed satisfactorily (SYNTHETIC DEMO DATA).",
+        "supporting_metadata": "Sanctioned educational occupancy approved. Hydrant network functional."
+    },
+    "UNIV-AFFIL-SARASWATI-01": {
+        "approval_ref": "UNIV-AFFIL-SARASWATI-01",
+        "issuing_authority": "State Technical University Examination & Affiliation Board",
+        "approval_type": "AFFILIATION_LETTER",
+        "institution_name": "Saraswati College of Engineering & Technology",
+        "approved_location": "Survey 104/2A, Kothrud, Pune, Maharashtra",
+        "issue_date": "2025-05-15",
+        "valid_till": "2027-06-30",
+        "status": "ACTIVE",
+        "status_reason": "Permanent affiliation renewed for undergraduate engineering programmes (SYNTHETIC DEMO DATA).",
+        "supporting_metadata": "Sanctioned B.Tech CSE intake: 120 seats."
+    },
     "FS-2026-1044": {
         "approval_ref": "FS-2026-1044",
         "issuing_authority": "Municipal Directorate of Fire & Emergency Services",
@@ -81,6 +105,18 @@ SIMULATED_AUTHORITY_REGISTRY = {
     },
 
     # --- SCENARIO D: Approved Location Mismatch (LOCATION_MISMATCH) ---
+    "UNIV-AFFIL-VANGUARD-LOC-ERR": {
+        "approval_ref": "UNIV-AFFIL-VANGUARD-LOC-ERR",
+        "issuing_authority": "State Technical University Examination & Affiliation Board",
+        "approval_type": "AFFILIATION_LETTER",
+        "institution_name": "Vanguard Institute of Applied Technology",
+        "approved_location": "Plot 88, MIDC Hinjewadi Phase 3, Pune, Maharashtra",
+        "issue_date": "2024-05-20",
+        "valid_till": "2027-05-19",
+        "status": "ACTIVE",
+        "status_reason": "Affiliation order sanctioned for Hinjewadi campus premises only (SYNTHETIC DEMO DATA).",
+        "supporting_metadata": "Declared application campus is Katraj-Kondhwa Road."
+    },
     "BP-2024-DIFF-LOC": {
         "approval_ref": "BP-2024-DIFF-LOC",
         "issuing_authority": "Municipal Corporation Town Planning Department",
@@ -95,6 +131,18 @@ SIMULATED_AUTHORITY_REGISTRY = {
     },
 
     # --- SCENARIO F: Expired Approval Record (EXPIRED) ---
+    "FS-2024-VANGUARD-EXP": {
+        "approval_ref": "FS-2024-VANGUARD-EXP",
+        "issuing_authority": "Municipal Directorate of Fire & Emergency Services",
+        "approval_type": "FIRE_SAFETY_NOC",
+        "institution_name": "Vanguard Institute of Applied Technology",
+        "approved_location": "Campus Sector 12, Katraj-Kondhwa Road, Pune, Maharashtra",
+        "issue_date": "2021-01-16",
+        "valid_till": "2024-01-15",
+        "status": "EXPIRED",
+        "status_reason": "Statutory three-year validity expired on 15/01/2024 without recorded renewal (SYNTHETIC DEMO DATA).",
+        "supporting_metadata": "Renewal application pending inspection."
+    },
     "FS-2025-9981": {
         "approval_ref": "FS-2025-9981",
         "issuing_authority": "Municipal Directorate of Fire & Emergency Services",

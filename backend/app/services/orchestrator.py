@@ -5,7 +5,7 @@ import re
 from sqlalchemy.orm import Session
 from app.models import (
     Application, Document, Finding, BaselineRecord, ScrutinyRun,
-    CheckResult, Alert, AuthorityVerification, AuditEvent
+    CheckResult, Alert, AuthorityVerification, AuditEvent, ExtractedField
 )
 from app.services.compliance_rules import compliance_engine
 from app.services.anomaly_service import (
@@ -18,7 +18,11 @@ from app.services.authority_verification import (
     decode_qr_code_from_image,
     verify_against_authority_registry
 )
-from app.services.infrastructure_review import check_cross_slot_photo_reuse
+from app.services.cross_document_engine import run_cross_document_consistency_checks
+from app.services.infrastructure_review import (
+    check_cross_slot_photo_reuse,
+    evaluate_application_infrastructure
+)
 
 SCRUTINY_BASELINE_DATE = "2026-03-31"
 
@@ -75,7 +79,7 @@ def execute_automated_scrutiny(
     def record_check(code: str, category: str, status: str, explanation: str, exp: str = None, obs: str = None, sev: str = "MEDIUM", human_rev: bool = False):
         nonlocal total_checks, passed_checks, failed_checks, warnings_count
         total_checks += 1
-        if status == "PASSED":
+        if status in ("PASSED", "VERIFIED"):
             passed_checks += 1
         elif status in ("FAILED", "EXPIRED", "INCOMPLETE"):
             failed_checks += 1
@@ -227,7 +231,7 @@ def execute_automated_scrutiny(
                     db=db,
                     app_id=app.id,
                     run_id=scrutiny_run.id,
-                    code=f"FND-EXPIRED-FIRE-{fire_doc.id}",
+                    code=f"FND-EXPIRED-FIRE-{app.id}",
                     category="EXPIRED_DOCUMENT",
                     severity="HIGH",
                     title="Expired Fire and Life Safety Certificate (NOC)",
@@ -238,7 +242,8 @@ def execute_automated_scrutiny(
                     rule_code="APH-2026-NOC-FIRE-02 [PLACEHOLDER PENDING HANDBOOK MAPPING]",
                     rule_desc="Fire and Life Safety Certificate must remain unexpired as of scrutiny date.",
                     rec_action="Request applicant to upload a renewed Fire Safety NOC.",
-                    evidence_class="VERIFIED_FACT"
+                    evidence_class="VERIFIED_FACT",
+                    page_num=getattr(expiry_field, "page_number", 1) or 1
                 )
                 _create_or_update_alert(
                     db=db,
@@ -565,6 +570,166 @@ def execute_automated_scrutiny(
                 )
                 _resolve_finding_if_exists(db, app.id, f"FND-PDF-MOD-{doc.id}", alert_type="ANOMALY_DETECTED")
 
+    # --- CHECK 9: Cross-Document Consistency Engine ---
+    xdoc_checks = run_cross_document_consistency_checks(active_docs, app)
+    for xc in xdoc_checks:
+        check_code = f"APH-2026-{xc['check_code']}"
+        fnd_code = f"FND-XDOC-{xc['check_code']}-{app.id}"
+
+        if xc["status"] == "MATCH":
+            record_check(
+                code=check_code,
+                category="COMPLIANCE",
+                status="PASSED",
+                exp=xc["expected_value"],
+                obs=xc["observed_value"],
+                explanation=xc["explanation"]
+            )
+            _resolve_finding_if_exists(db, app.id, f"FND-XDOC-{xc['check_code']}", alert_type="RECORD_MISMATCH")
+        elif xc["status"] == "MISMATCH":
+            record_check(
+                code=check_code,
+                category="COMPLIANCE",
+                status="FAILED",
+                exp=xc["expected_value"],
+                obs=xc["observed_value"],
+                explanation=xc["explanation"],
+                sev=xc["severity"],
+                human_rev=True
+            )
+            # Serialize secondary document info into source_snippet for viewer linking
+            sec_snippet = None
+            if xc.get("doc2_id") or xc.get("doc2_name"):
+                sec_snippet = json.dumps({
+                    "doc1_id": xc.get("doc1_id"),
+                    "doc1_name": xc.get("doc1_name"),
+                    "doc1_category": xc.get("doc1_category"),
+                    "doc1_value": xc.get("doc1_value"),
+                    "doc1_page": xc.get("doc1_page"),
+                    "doc2_id": xc.get("doc2_id"),
+                    "doc2_name": xc.get("doc2_name"),
+                    "doc2_category": xc.get("doc2_category"),
+                    "doc2_value": xc.get("doc2_value"),
+                    "doc2_page": xc.get("doc2_page")
+                })
+
+            fnd = _upsert_finding(
+                db=db,
+                app_id=app.id,
+                run_id=scrutiny_run.id,
+                code=fnd_code,
+                category="RECORD_MISMATCH",
+                severity=xc["severity"],
+                title=f"Cross-Document Discrepancy — {xc['field_name']}",
+                desc=xc["explanation"],
+                exp=xc["expected_value"],
+                obs=xc["observed_value"],
+                rule_code="APH-2026-XDOC-07",
+                rule_desc="Cross-document data reconciliation across statutory submissions.",
+                rec_action="Review discrepancy in document viewer and request clarification or corrected documentation.",
+                doc_id=xc.get("doc1_id"),
+                page_num=xc.get("doc1_page") or 1,
+                evidence_class="VERIFIED_FACT",
+                source_snippet=sec_snippet
+            )
+            _create_or_update_alert(
+                db=db,
+                app_id=app.id,
+                alert_type="RECORD_MISMATCH",
+                severity="Review required",
+                title=f"Cross-Document Discrepancy: {xc['field_name']}",
+                message=xc["explanation"],
+                finding_id=fnd.id,
+                scrutiny_run_id=scrutiny_run.id
+            )
+        elif xc["status"] in ("NOT_ENOUGH_INFORMATION", "CHECK_FAILED"):
+            record_check(
+                code=check_code,
+                category="COMPLIANCE",
+                status="MANUAL_REVIEW",
+                exp=xc["expected_value"],
+                obs=xc["observed_value"],
+                explanation=xc["explanation"],
+                sev="LOW",
+                human_rev=True
+            )
+
+    # --- CHECK 10: Infrastructure Photographic Evidence & EVC Review ---
+    infra_checks = evaluate_application_infrastructure(app, active_docs)
+    for ic in infra_checks:
+        check_code = f"APH-2026-{ic['check_code']}"
+        doc_id = ic.get("doc_id")
+        fnd_code = f"FND-INFRA-{doc_id}" if doc_id else f"FND-INFRA-{app.id}"
+
+        if ic["status"] == "PASSED":
+            record_check(
+                code=check_code,
+                category="INFRASTRUCTURE",
+                status="PASSED",
+                exp=ic["expected_value"],
+                obs=ic["observed_value"],
+                explanation=ic["explanation"]
+            )
+            if doc_id:
+                _resolve_finding_if_exists(db, app.id, f"FND-INFRA-{doc_id}", alert_type="INFRASTRUCTURE_REVIEW")
+        elif ic["status"] in ("MANUAL_REVIEW", "FAILED"):
+            record_check(
+                code=check_code,
+                category="INFRASTRUCTURE",
+                status=ic["status"],
+                exp=ic["expected_value"],
+                obs=ic["observed_value"],
+                explanation=ic["explanation"],
+                sev=ic["severity"],
+                human_rev=ic["requires_human_review"]
+            )
+            title = (
+                "Laboratory Infrastructure Evidence Low Resolution — EVC Inspection Recommended"
+                if ic.get("is_evc_recommended")
+                else "Laboratory Infrastructure Evidence Requires Review"
+            )
+            fnd = _upsert_finding(
+                db=db,
+                app_id=app.id,
+                run_id=scrutiny_run.id,
+                code=fnd_code,
+                category="INTEGRITY_ANOMALY" if ic.get("outcome") == "CHECK_FAILED" else "COMPLIANCE",
+                severity=ic["severity"],
+                title=title,
+                desc=ic["explanation"],
+                exp=ic["expected_value"],
+                obs=ic["observed_value"],
+                rule_code="APH-2026-INFRA-08",
+                rule_desc="Infrastructure photographic evidence clarity and physical verification standards.",
+                rec_action=(
+                    "Recommend on-site physical machinery verification via Expert Visit Committee (EVC)."
+                    if ic.get("is_evc_recommended")
+                    else "Inspect photographic evidence or request clear replacement image."
+                ),
+                doc_id=doc_id,
+                page_num=1,
+                evidence_class="AUTOMATED_INFERENCE" if ic.get("is_evc_recommended") else "CHECK_NOT_COMPLETED"
+            )
+            _create_or_update_alert(
+                db=db,
+                app_id=app.id,
+                alert_type="INFRASTRUCTURE_REVIEW",
+                severity="Review required",
+                title=title,
+                message=ic["explanation"],
+                finding_id=fnd.id,
+                scrutiny_run_id=scrutiny_run.id
+            )
+        elif ic["status"] == "NOT_APPLICABLE":
+            record_check(
+                code=check_code,
+                category="INFRASTRUCTURE",
+                status="PASSED",
+                exp=ic["expected_value"],
+                obs=ic["observed_value"],
+                explanation=ic["explanation"]
+            )
+
     # Finalize Scrutiny Run metrics
     duration_ms = int((time.time() - start_time) * 1000)
     scrutiny_run.total_checks = total_checks
@@ -578,8 +743,11 @@ def execute_automated_scrutiny(
 
     # Update application overall status
     if not app.final_decision:
-        open_findings = db.query(Finding).filter(Finding.application_id == app.id, Finding.review_status == "OPEN").count()
-        if open_findings > 0 or failed_checks > 0:
+        unresolved_findings = db.query(Finding).filter(
+            Finding.application_id == app.id,
+            Finding.review_status.in_(["OPEN", "ACKNOWLEDGED", "RECTIFICATION_REQUESTED", "EVC_RECOMMENDED"])
+        ).count()
+        if unresolved_findings > 0 or failed_checks > 0:
             app.status = "DEFICIENCY_FLAGGED"
             _resolve_finding_if_exists(db, app.id, "READY_FOR_REVIEW", alert_type="READY_FOR_REVIEW")
         else:
@@ -619,24 +787,38 @@ def execute_automated_scrutiny(
 def _upsert_finding(
     db: Session,
     app_id: int,
-    run_id: int,
-    code: str,
-    category: str,
-    severity: str,
-    title: str,
-    desc: str,
-    exp: str,
-    obs: str,
-    rule_code: str,
-    rule_desc: str,
-    rec_action: str,
+    run_id: int = None,
+    code: str = "",
+    category: str = "RECORD_MISMATCH",
+    severity: str = "HIGH",
+    title: str = "",
+    desc: str = "",
+    exp: str = None,
+    obs: str = None,
+    rule_code: str = "",
+    rule_desc: str = "",
+    rec_action: str = "",
     doc_id: int = None,
     evidence_class: str = "VERIFIED_FACT",
-    page_num: int = None
+    page_num: int = None,
+    source_snippet: str = None,
+    bounding_box: str = None
 ) -> Finding:
+    if doc_id and not bounding_box:
+        query = db.query(ExtractedField).filter(
+            ExtractedField.document_id == doc_id,
+            ExtractedField.bounding_box.isnot(None)
+        )
+        if page_num:
+            query = query.filter(ExtractedField.page_number == page_num)
+        ef = query.first()
+        if ef:
+            bounding_box = ef.bounding_box
+
     existing = db.query(Finding).filter(Finding.finding_code == code, Finding.application_id == app_id).first()
     if existing:
-        existing.scrutiny_run_id = run_id
+        if run_id:
+            existing.scrutiny_run_id = run_id
         existing.description = desc
         existing.expected_value = exp
         existing.observed_value = obs
@@ -644,6 +826,12 @@ def _upsert_finding(
             existing.supporting_document_id = doc_id
         if page_num:
             existing.supporting_page_number = page_num
+        if source_snippet:
+            existing.source_snippet = source_snippet
+        if bounding_box:
+            existing.bounding_box = bounding_box
+        if existing.review_status == "RESOLVED":
+            existing.review_status = "OPEN"
         existing.updated_at = datetime.datetime.now(datetime.timezone.utc)
         return existing
     else:
@@ -660,6 +848,8 @@ def _upsert_finding(
             observed_value=obs,
             supporting_document_id=doc_id,
             supporting_page_number=page_num,
+            source_snippet=source_snippet,
+            bounding_box=bounding_box,
             rule_code=rule_code,
             rule_description=rule_desc,
             recommended_action=rec_action,
@@ -669,6 +859,8 @@ def _upsert_finding(
         db.add(finding)
         db.flush()
         return finding
+
+upsert_finding = _upsert_finding
 
 
 def _resolve_finding_if_exists(db: Session, app_id: int, code_prefix: str, alert_type: str = None):

@@ -1,11 +1,12 @@
 import os
+import mimetypes
 from pathlib import Path
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Application, Document, ExtractedField, AuditEvent
-from app.schemas import DocumentResponse
+from app.schemas import DocumentResponse, DocumentDetailResponse
 from app.services.storage import validate_and_store_document
 from app.services.document_parser import extract_document_content
 from app.services.orchestrator import execute_automated_scrutiny
@@ -86,6 +87,7 @@ def upload_application_document(
             confidence_score=field_info.get("confidence_score", 1.0),
             page_number=field_info.get("page_number", 1),
             source_snippet=field_info.get("source_snippet"),
+            bounding_box=field_info.get("bounding_box"),
             extraction_method=field_info.get("extraction_method", parsed.get("extraction_method"))
         )
         db.add(ef)
@@ -134,13 +136,63 @@ def upload_application_document(
     }
 
 
-@router.get("/documents/{id}/stream")
-def stream_document(
+@router.get("/documents/{id}", response_model=DocumentDetailResponse)
+@router.get("/applications/{app_id}/documents/{id}", response_model=DocumentDetailResponse)
+def get_document_details(
     id: int,
+    app_id: int = None,
     db: Session = Depends(get_db),
     current_user: UserInfo = Depends(get_current_user)
 ):
-    doc = db.query(Document).filter(Document.id == id).first()
+    query = db.query(Document).filter(Document.id == id)
+    if app_id is not None:
+        query = query.filter(Document.application_id == app_id)
+    doc = query.first()
+    if not doc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+    # Enforce applicant access restrictions
+    if current_user.role == "APPLICANT" and current_user.institution_id:
+        if doc.application.institution.aicte_permanent_id != current_user.institution_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: You are not authorized to access documents from another institution."
+            )
+
+    preview = (doc.extracted_text[:200] + "...") if doc.extracted_text and len(doc.extracted_text) > 200 else doc.extracted_text
+    return {
+        "id": doc.id,
+        "application_id": doc.application_id,
+        "document_category": doc.document_category,
+        "original_filename": doc.original_filename,
+        "file_size_bytes": doc.file_size_bytes,
+        "mime_type": doc.mime_type,
+        "sha256_hash": doc.sha256_hash,
+        "phash_value": doc.phash_value,
+        "status": doc.status,
+        "page_count": doc.page_count,
+        "extracted_text_preview": preview,
+        "extracted_text": doc.extracted_text,
+        "stream_url": f"/api/documents/{doc.id}/stream",
+        "uploaded_at": doc.uploaded_at,
+        "extracted_fields": doc.extracted_fields
+    }
+
+
+@router.get("/documents/{id}/stream")
+@router.get("/documents/{id}/raw")
+@router.get("/applications/{app_id}/documents/{id}/stream")
+@router.get("/applications/{app_id}/documents/{id}/raw")
+def stream_document(
+    id: int,
+    app_id: int = None,
+    db: Session = Depends(get_db),
+    current_user: UserInfo = Depends(get_current_user)
+):
+    query = db.query(Document).filter(Document.id == id)
+    if app_id is not None:
+        query = query.filter(Document.application_id == app_id)
+    doc = query.first()
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
@@ -156,9 +208,15 @@ def stream_document(
     if not file_path.exists():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document file missing from vault")
 
+    # Determine accurate media type
+    media_type = doc.mime_type
+    if not media_type or media_type == "application/octet-stream":
+        guessed_type, _ = mimetypes.guess_type(doc.original_filename)
+        media_type = guessed_type or ("application/pdf" if doc.original_filename.lower().endswith(".pdf") else "application/octet-stream")
+
     return FileResponse(
         path=str(file_path),
-        media_type=doc.mime_type,
+        media_type=media_type,
         filename=doc.original_filename,
         headers={"Content-Disposition": f"inline; filename=\"{doc.original_filename}\""}
     )

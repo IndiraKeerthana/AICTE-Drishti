@@ -224,6 +224,7 @@ rules:
     must be uploaded and valid.
   recommended_action: Issue formal deficiency query listing missing mandatory document
     categories.
+  evaluation_method: MANDATORY_DOCUMENTS
 - rule_code: APH-2026-NOC-FIRE-02
   version: '1.0'
   name: Fire and Life Safety Certificate Validity
@@ -239,6 +240,7 @@ rules:
     authority must remain unexpired as of the scrutiny date.
   recommended_action: Require applicant to submit a renewed Fire Safety Certificate
     with a valid unexpired period.
+  evaluation_method: FIRE_SAFETY_EXPIRY
 - rule_code: APH-2026-LAND-03
   version: '1.0'
   name: Minimum Campus Land Norm
@@ -255,6 +257,7 @@ rules:
     registered land (7.50 acres for Rural; 2.50 acres for Urban).
   recommended_action: Verify revenue title deed or municipal land conversion certificate
     to confirm land requirement.
+  evaluation_method: CAMPUS_LAND_NORM
 - rule_code: APH-2026-INTAKE-04
   version: '1.0'
   name: Sanctioned Intake Baseline Reconciliation
@@ -268,6 +271,7 @@ rules:
     in the baseline EoA of the preceding Academic Year.
   recommended_action: Reconcile with official AICTE past approvals. If unapproved,
     request deficiency justification.
+  evaluation_method: INTAKE_BASELINE_RECONCILIATION
 - rule_code: APH-2026-FSR-05
   version: '1.0'
   name: Faculty-to-Student Cadre Ratio
@@ -276,13 +280,15 @@ rules:
   - EOA_REGULAR
   severity: HIGH
   is_mandatory: false
-  clause: APH Chapter VII, Clause 7.1 (Cadre Ratio & FSR Norms)
-  is_confirmed: true
+  clause: APH Chapter VII, Clause 7.1 (Cadre Ratio & FSR Norms) [PENDING OFFICIAL
+    HANDBOOK MAPPING]
+  is_confirmed: false
   max_students_per_faculty: 20
   description: Engineering institutions must maintain a minimum Faculty-to-Student
     Ratio (FSR) of 1:15 or 1:20 based on approved intake.
   recommended_action: Inspect faculty roster and salary disbursements to verify sufficient
     sanctioned teaching positions.
+  evaluation_method: FACULTY_STUDENT_RATIO
 - rule_code: APH-2026-NAME-06
   version: '1.0'
   name: Institution Title Consistency
@@ -299,3 +305,37 @@ rules:
     certificates must match registered AICTE title within acceptable token variation.
   recommended_action: Verify whether a formal Name Change approval gazette exists,
     or flag for scrutiny officer review.
+  evaluation_method: INSTITUTION_NAME_CONSISTENCY
+- rule_code: APH-2026-XDOC-07
+  version: '1.0'
+  name: Cross-Document Entity Reconciliation
+  category_codes:
+  - INCREASE_INTAKE
+  - NEW_INSTITUTE
+  - EOA_REGULAR
+  severity: HIGH
+  is_mandatory: true
+  evaluation_method: CROSS_DOCUMENT_CONSISTENCY
+  clause: APH Chapter I & II, Cross-Verification Standards
+  is_confirmed: true
+  description: Key institutional parameters (land area, intake, location, and references)
+    must reconcile consistently across all uploaded statutory documents.
+  recommended_action: Compare conflicting attachments in document viewer and request
+    deficiency explanation.
+- rule_code: APH-2026-INFRA-08
+  version: '1.0'
+  name: Infrastructure Evidence & Visual Quality Review
+  category_codes:
+  - INCREASE_INTAKE
+  - NEW_INSTITUTE
+  severity: MEDIUM
+  is_mandatory: false
+  evaluation_method: INFRASTRUCTURE_PHOTO_REVIEW
+  clause: APH Appendix 4, Infrastructure & Laboratory Norms [PENDING OFFICIAL HANDBOOK
+    MAPPING]
+  is_confirmed: false
+  description: Laboratory and campus evidence photos must satisfy minimum digital
+    quality thresholds (600x400) and are subject to physical Expert Visit Committee
+    (EVC) verification.
+  recommended_action: Request higher-resolution photos or recommend on-site inspection
+    by Expert Visit Committee.

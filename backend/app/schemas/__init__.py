@@ -1,6 +1,7 @@
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 from typing import Optional, List, Any
 import datetime
+import json
 
 # --- Institution Schemas ---
 class InstitutionBase(BaseModel):
@@ -65,10 +66,17 @@ class ExtractedFieldResponse(BaseModel):
     confidence_score: float
     page_number: int
     source_snippet: Optional[str] = None
+    bounding_box: Optional[str] = None
     extraction_method: str
     created_at: datetime.datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class DocumentDetailResponse(DocumentResponse):
+    extracted_text: Optional[str] = None
+    stream_url: Optional[str] = None
+    extracted_fields: List[ExtractedFieldResponse] = []
 
 
 # --- Check Result Schemas ---
@@ -142,13 +150,43 @@ class FindingResponse(BaseModel):
     supporting_document_id: Optional[int] = None
     supporting_page_number: Optional[int] = None
     source_snippet: Optional[str] = None
+    bounding_box: Optional[str] = None
     rule_code: str
     rule_description: str
     recommended_action: str
     review_status: str
     resolution_notes: Optional[str] = None
+    secondary_document_id: Optional[int] = None
+    secondary_page_number: Optional[int] = None
+    secondary_document_name: Optional[str] = None
     created_at: datetime.datetime
     updated_at: datetime.datetime
+
+    @model_validator(mode="before")
+    @classmethod
+    def populate_secondary_metadata(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            d = dict(data)
+        else:
+            d = {
+                c.name: getattr(data, c.name, None)
+                for c in getattr(data, "__table__", []).columns
+            } if hasattr(data, "__table__") else dict(data.__dict__)
+
+        snippet = d.get("source_snippet")
+        if snippet and isinstance(snippet, str) and "doc2" in snippet:
+            try:
+                meta = json.loads(snippet)
+                if isinstance(meta, dict):
+                    if meta.get("doc2_id"):
+                        d.setdefault("secondary_document_id", meta["doc2_id"])
+                    if meta.get("doc2_page"):
+                        d.setdefault("secondary_page_number", meta["doc2_page"])
+                    if meta.get("doc2_name"):
+                        d.setdefault("secondary_document_name", meta["doc2_name"])
+            except Exception:
+                pass
+        return d
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -245,9 +283,19 @@ class ScrutinyReportGrouped(BaseModel):
 
 
 class DeficiencyNoticePayload(BaseModel):
-    finding_ids: List[int]
+    finding_ids: Optional[List[int]] = []
+    document_categories: Optional[List[str]] = []
     instructions: str
-    officer_name: Optional[str] = "Dr. V. Sharma (AICTE Scrutiny Officer)"
+    officer_name: Optional[str] = "Officer"
+
+
+class ActiveDeficiencyNoticeResponse(BaseModel):
+    is_active: bool = True
+    instructions: str
+    issued_by: str
+    issued_at: datetime.datetime
+    requested_categories: List[str] = []
+    finding_ids: List[int] = []
 
 
 class ApplicationDetailResponse(ApplicationResponse):
@@ -260,4 +308,4 @@ class ApplicationDetailResponse(ApplicationResponse):
     baseline_record: Optional[BaselineRecordResponse] = None
     document_checklist: List[DocumentChecklistItem] = []
     grouped_scrutiny_report: Optional[ScrutinyReportGrouped] = None
-
+    active_deficiency_notice: Optional[ActiveDeficiencyNoticeResponse] = None

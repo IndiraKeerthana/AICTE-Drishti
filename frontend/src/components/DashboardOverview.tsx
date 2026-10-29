@@ -130,6 +130,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
+  const [sortOrder, setSortOrder] = useState<'NEWEST' | 'OLDEST'>('NEWEST');
 
   // Operational Workload Counts
   const justSubmittedCount = applications.filter(a => a.status === 'SUBMITTED').length;
@@ -173,16 +174,21 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
 
         return matchesSearch && matchesCategory && matchesStatus;
       })
-      // Strictly sort by submission timestamp, oldest first (FIFO order)
-      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-  }, [baseApplications, searchTerm, selectedCategory, selectedStatus]);
+      // Chronological sort by submission timestamp (configurable: Newest first or Oldest first)
+      .sort((a, b) => {
+        const timeA = new Date(a.created_at).getTime();
+        const timeB = new Date(b.created_at).getTime();
+        return sortOrder === 'NEWEST' ? timeB - timeA : timeA - timeB;
+      });
+  }, [baseApplications, searchTerm, selectedCategory, selectedStatus, sortOrder]);
 
-  const hasActiveFilters = searchTerm !== '' || selectedCategory !== 'ALL' || selectedStatus !== 'ALL';
+  const hasActiveFilters = searchTerm !== '' || selectedCategory !== 'ALL' || selectedStatus !== 'ALL' || sortOrder !== 'NEWEST';
 
   const handleClearFilters = () => {
     setSearchTerm('');
     setSelectedCategory('ALL');
     setSelectedStatus('ALL');
+    setSortOrder('NEWEST');
   };
 
   return (
@@ -199,7 +205,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
               </span>
             </div>
             <p className="text-xs text-slate-300 max-w-2xl">
-              Applications are listed in chronological submission order (oldest first). Select an application to inspect required documents, review verified checks, and record statutory decisions.
+              Applications are listed chronologically by submission timestamp. Select an application to inspect required documents, review verified checks, and record statutory decisions.
             </p>
           </div>
           <div className="flex items-center space-x-2 shrink-0">
@@ -295,7 +301,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
               )}
             </h2>
             <span className="text-xs text-slate-400 font-normal">
-              ({filteredApplications.length} applications &bull; sorted oldest first)
+              ({filteredApplications.length} applications &bull; {sortOrder === 'NEWEST' ? 'newest first' : 'oldest first'})
             </span>
           </div>
 
@@ -345,6 +351,19 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                 </select>
               </div>
             )}
+
+            {/* Sort Order Selector */}
+            <div className="flex items-center space-x-1 text-xs">
+              <select
+                value={sortOrder}
+                onChange={(e) => setSortOrder(e.target.value as 'NEWEST' | 'OLDEST')}
+                className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-700 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                aria-label="Sort order"
+              >
+                <option value="NEWEST">Sort: Newest First</option>
+                <option value="OLDEST">Sort: Oldest First (FIFO)</option>
+              </select>
+            </div>
 
             {/* Clear Filters Button */}
             {hasActiveFilters && (
@@ -430,7 +449,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                           <span>{app.application_number}</span>
                           {index === 0 && !hasActiveFilters && (
                             <span className="text-[10px] bg-slate-100 text-slate-600 font-sans px-1.5 py-0.5 rounded border border-slate-200">
-                              Earliest
+                              {sortOrder === 'NEWEST' ? 'Latest' : 'Earliest'}
                             </span>
                           )}
                         </div>

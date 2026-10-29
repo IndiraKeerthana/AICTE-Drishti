@@ -5,13 +5,14 @@ from app.config import settings
 from app.database import engine, Base, SessionLocal
 from app.api.router import api_router
 from app.services.baseline_service import ensure_baseline_records, ensure_default_users
+from app.services.demo_scenarios import seed_three_demo_scenarios
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # 1. Initialize SQLite database tables
     Base.metadata.create_all(bind=engine)
     
-    # 2. Seed default synthetic baseline institution & users
+    # 2. Seed default synthetic baseline institution, users & 3 demonstration scenarios
     db = SessionLocal()
     try:
         ensure_baseline_records(
@@ -20,6 +21,7 @@ async def lifespan(app: FastAPI):
             inst_name="Sample Institute of Technology"
         )
         ensure_default_users(db=db)
+        seed_three_demo_scenarios(db=db, force_refresh=False)
     finally:
         db.close()
 
