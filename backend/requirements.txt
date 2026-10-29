@@ -14,3 +14,5 @@ rapidfuzz>=3.10.0
 imagehash>=4.3.1
 opencv-python-headless>=4.10.0.84
 reportlab>=4.2.5
+pytesseract>=0.3.10
+qrcode>=8.0.0

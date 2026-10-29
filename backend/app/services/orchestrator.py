@@ -14,6 +14,7 @@ from app.services.anomaly_service import (
     compare_perceptual_hashes
 )
 from app.services.authority_verification import (
+    decode_qr_code,
     decode_qr_code_from_image,
     verify_against_authority_registry
 )
@@ -357,7 +358,9 @@ def execute_automated_scrutiny(
     for doc in active_docs:
         if doc.document_category in authority_categories:
             # 1. Attempt QR decode
-            qr_text, qr_notes = decode_qr_code_from_image(doc.storage_path)
+            qr_res = decode_qr_code(doc.storage_path, mime_type=doc.mime_type)
+            qr_text = qr_res.get("payload")
+            qr_notes = qr_res.get("notes")
 
             # 2. Extract certificate or approval reference number
             cert_num = next((ef.normalized_value for ef in doc.extracted_fields if ef.field_key in ("certificate_number", "approval_ref")), None)
@@ -378,7 +381,8 @@ def execute_automated_scrutiny(
                 cert_type=doc.document_category,
                 institution_name=app.institution.name,
                 declared_location=campus_location,
-                qr_payload=qr_text
+                qr_payload=qr_text,
+                qr_metadata=qr_res
             )
 
             # 3. Record in authority_verifications table
@@ -519,7 +523,7 @@ def execute_automated_scrutiny(
                     status="MANUAL_REVIEW",
                     exp="Single-pass unaltered PDF structure (incremental updates <= 1)",
                     obs=f"Detected {inc_count} incremental update revisions (multiple %%EOF trailers)",
-                    explanation=f"Attachment '{doc.original_filename}' contains {inc_count} post-issuance incremental modification blocks, indicating potential post-creation revision or alteration.",
+                    explanation=f"Attachment '{doc.original_filename}' contains {inc_count} post-issuance incremental modification blocks (%%EOF trailer markers), indicating potential post-creation revision or alteration. Note: Detects file-structure revisions, not cryptographic digital signatures.",
                     sev="HIGH",
                     human_rev=True
                 )
@@ -531,7 +535,7 @@ def execute_automated_scrutiny(
                     category="INTEGRITY_ANOMALY",
                     severity="HIGH",
                     title="Potential Post-Issuance PDF Modification Detected",
-                    desc=f"Document '{doc.original_filename}' exhibits {inc_count} appended revision blocks (%%EOF markers) typically produced by post-export editing or redaction tools.",
+                    desc=f"Document '{doc.original_filename}' exhibits {inc_count} appended revision blocks (%%EOF markers) typically produced by post-export editing or redaction tools. Note: Detects file-structure revisions, not cryptographic digital signatures.",
                     exp="Single-pass unaltered PDF structure",
                     obs=f"{inc_count} incremental update revision(s)",
                     rule_code="APH-INTEGRITY-PDF-MOD-03",
@@ -573,13 +577,13 @@ def execute_automated_scrutiny(
     scrutiny_run.completed_at = datetime.datetime.now(datetime.timezone.utc)
 
     # Update application overall status
-    open_findings = db.query(Finding).filter(Finding.application_id == app.id, Finding.review_status == "OPEN").count()
-    if open_findings > 0 or failed_checks > 0:
-        app.status = "DEFICIENCY_FLAGGED"
-        _resolve_finding_if_exists(db, app.id, "READY_FOR_REVIEW", alert_type="READY_FOR_REVIEW")
-    else:
-        app.status = "READY_FOR_REVIEW"
-        if not app.final_decision:
+    if not app.final_decision:
+        open_findings = db.query(Finding).filter(Finding.application_id == app.id, Finding.review_status == "OPEN").count()
+        if open_findings > 0 or failed_checks > 0:
+            app.status = "DEFICIENCY_FLAGGED"
+            _resolve_finding_if_exists(db, app.id, "READY_FOR_REVIEW", alert_type="READY_FOR_REVIEW")
+        else:
+            app.status = "READY_FOR_REVIEW"
             _create_or_update_alert(
                 db=db,
                 app_id=app.id,

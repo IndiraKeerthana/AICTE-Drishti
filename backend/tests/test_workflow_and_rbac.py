@@ -84,11 +84,34 @@ def test_final_decision_rbac_and_statutory_permissions(client):
     assert forbidden_dec.status_code == 403
     assert "Access denied" in forbidden_dec.json()["detail"]
 
-    # 2. Authorized Approver / Regional Officer records final statutory decision
+    # 1b. Gating blocks premature approval recommendation before required documents are uploaded
     approver_headers = {
         "X-User-Role": "APPROVER",
         "X-User-Id": "approver1"
     }
+    gated_dec = client.post(
+        f"/api/applications/{app_id}/decision",
+        json={
+            "decision": "RECOMMEND_APPROVAL",
+            "justification_remarks": "Premature approval attempt without required documents.",
+            "officer_name": "Prof. R. K. Verma (Regional Officer)"
+        },
+        headers=approver_headers
+    )
+    assert gated_dec.status_code == 422
+    assert "Approval blocked" in gated_dec.json()["detail"]
+
+    # Upload all mandatory documents for EOA_REGULAR
+    for cat in ["FIRE_SAFETY_NOC", "AFFILIATION_LETTER", "FACULTY_ROSTER"]:
+        pdf = create_sample_pdf(f"Statutory document for {cat} AY 2026-2027.")
+        doc_upload = client.post(
+            f"/api/applications/{app_id}/documents",
+            data={"document_category": cat},
+            files={"file": (f"{cat}.pdf", io.BytesIO(pdf), "application/pdf")}
+        )
+        assert doc_upload.status_code == 201
+
+    # 2. Authorized Approver / Regional Officer records final statutory decision once eligible
     valid_dec = client.post(
         f"/api/applications/{app_id}/decision",
         json={

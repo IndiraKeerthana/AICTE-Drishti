@@ -111,12 +111,21 @@ def test_alerts_and_officer_decision(client):
     run_detail = client.get(f"/api/runs/{run_id}").json()
     assert len(run_detail["checks"]) >= 2
 
-    # 4. Officer final decision recording
-    dec_res = client.post(f"/api/applications/{app_id}/decision", json={
+    # 4a. Gating correctly blocks approval recommendation on deficient application
+    blocked_res = client.post(f"/api/applications/{app_id}/decision", json={
         "decision": "RECOMMEND_APPROVAL",
         "justification_remarks": "Scrutiny committee reviewed all evidence and approved relaxation under State Gazette.",
         "officer_name": "Dr. V. Sharma (AICTE Scrutiny Officer)"
     })
+    assert blocked_res.status_code == 422
+    assert "Approval blocked" in blocked_res.json()["detail"]
+
+    # 4b. Officer records statutory rejection for unaddressed deficiencies
+    dec_res = client.post(f"/api/applications/{app_id}/decision", json={
+        "decision": "RECOMMEND_REJECTION",
+        "justification_remarks": "Application rejected due to unaddressed intake discrepancies and missing documentation.",
+        "officer_name": "Dr. V. Sharma (AICTE Scrutiny Officer)"
+    })
     assert dec_res.status_code == 200
-    assert dec_res.json()["status"] == "APPROVED"
-    assert dec_res.json()["final_decision"] == "RECOMMEND_APPROVAL"
+    assert dec_res.json()["status"] == "REJECTED"
+    assert dec_res.json()["final_decision"] == "RECOMMEND_REJECTION"

@@ -1,8 +1,11 @@
+import io
+import os
 import re
 import json
 from pathlib import Path
 from PIL import Image
 from app.services.anomaly_service import compute_image_phash, inspect_pdf_metadata_and_updates
+from app.config import settings
 
 # Graceful import of fitz (PyMuPDF)
 try:
@@ -19,7 +22,55 @@ except ImportError:
     TESSERACT_AVAILABLE = False
 
 
-def extract_document_content(storage_path: str, mime_type: str) -> dict:
+def configure_tesseract() -> tuple[bool, str]:
+    """
+    Checks if pytesseract and the underlying Tesseract OCR engine binary are operational.
+    Configures tesseract_cmd from settings, environment variables, or standard paths on Windows.
+    Returns (is_available, status_or_version_message).
+    """
+    if not TESSERACT_AVAILABLE:
+        return False, "pytesseract Python package is not installed."
+
+    if not getattr(settings, "ENABLE_OCR", True):
+        return False, "OCR processing is disabled in system configuration (ENABLE_OCR=False)."
+
+    custom_cmd = getattr(settings, "TESSERACT_CMD", "") or os.environ.get("TESSERACT_CMD", "")
+    if custom_cmd:
+        pytesseract.pytesseract.tesseract_cmd = custom_cmd
+
+    # On Windows, try standard default locations if not configured or not found in PATH
+    if os.name == "nt":
+        current_cmd = getattr(pytesseract.pytesseract, "tesseract_cmd", "tesseract")
+        if current_cmd in ("tesseract", "") or not os.path.exists(current_cmd):
+            common_paths = [
+                r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+                r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+                os.path.expandvars(r"%LOCALAPPDATA%\Programs\Tesseract-OCR\tesseract.exe"),
+            ]
+            for p in common_paths:
+                if os.path.exists(p):
+                    pytesseract.pytesseract.tesseract_cmd = p
+                    break
+
+    try:
+        ver = pytesseract.get_tesseract_version()
+        return True, f"Tesseract v{ver}"
+    except Exception as e:
+        return False, f"Tesseract engine binary not found or failed execution: {str(e)}"
+
+
+def is_tesseract_available() -> bool:
+    """Helper to check if Tesseract OCR engine is functional."""
+    avail, _ = configure_tesseract()
+    return avail
+
+
+def extract_document_content(
+    storage_path: str,
+    mime_type: str,
+    max_ocr_pages: int = 3,
+    ocr_timeout_sec: int = 15
+) -> dict:
     """
     Parses document and returns complete intelligence metadata dict:
     - extracted_text
@@ -32,6 +83,9 @@ def extract_document_content(storage_path: str, mime_type: str) -> dict:
     - ocr_needed
     - ocr_performed
     - ocr_engine_available
+    - status ('PROCESSED' or 'EXTRACTION_FAILED')
+    - incomplete_reason
+    - is_complete (bool)
     """
     extracted_text = ""
     page_count = 1
@@ -42,40 +96,125 @@ def extract_document_content(storage_path: str, mime_type: str) -> dict:
     incremental_count = 0
     ocr_needed = False
     ocr_performed = False
+    doc_status = "PROCESSED"
+    incomplete_reason = None
+
+    is_tess_avail, tess_status_msg = configure_tesseract()
 
     if mime_type == "application/pdf":
         meta_info = inspect_pdf_metadata_and_updates(storage_path)
         metadata_json = json.dumps(meta_info)
         incremental_count = meta_info.get("incremental_updates_count", 0)
 
-        if PYMUPDF_AVAILABLE:
-            try:
-                doc = fitz.open(storage_path)
-                page_count = len(doc)
-                pages_text = []
-                for page_idx, page in enumerate(doc):
-                    text = page.get_text("text") or ""
-                    pages_text.append(text)
-                    _extract_fields_from_page(text, page_idx + 1, extracted_fields, method="PYMUPDF")
-                
-                doc.close()
-                extracted_text = "\n--- Page Break ---\n".join(pages_text).strip()
-            except Exception as e:
-                extracted_text = f"PDF parsing error: {str(e)}"
-                extraction_method = "ERROR"
-        else:
-            extracted_text = "PyMuPDF not installed on host."
-            extraction_method = "FALLBACK_PLACEHOLDER"
+        if not PYMUPDF_AVAILABLE:
+            return {
+                "extracted_text": "PyMuPDF not installed on host.",
+                "page_count": 0,
+                "extracted_fields": [],
+                "extraction_method": "FALLBACK_PLACEHOLDER",
+                "phash": None,
+                "metadata_json": metadata_json,
+                "incremental_updates_count": incremental_count,
+                "ocr_needed": False,
+                "ocr_performed": False,
+                "ocr_engine_available": is_tess_avail,
+                "status": "EXTRACTION_FAILED",
+                "incomplete_reason": "PyMuPDF library is unavailable.",
+                "is_complete": False
+            }
 
-        # Check if text is essentially empty (scanned PDF)
-        if len(extracted_text.strip()) < 30:
-            ocr_needed = True
-            if TESSERACT_AVAILABLE:
-                extraction_method = "OCR_TESSERACT"
-                ocr_performed = True
+        try:
+            doc = fitz.open(storage_path)
+            page_count = len(doc)
+        except Exception as e:
+            return {
+                "extracted_text": f"PDF parsing error: {str(e)}",
+                "page_count": 0,
+                "extracted_fields": [],
+                "extraction_method": "ERROR",
+                "phash": None,
+                "metadata_json": metadata_json,
+                "incremental_updates_count": incremental_count,
+                "ocr_needed": False,
+                "ocr_performed": False,
+                "ocr_engine_available": is_tess_avail,
+                "status": "EXTRACTION_FAILED",
+                "incomplete_reason": f"Corrupted or invalid PDF: {str(e)}",
+                "is_complete": False
+            }
+
+        try:
+            pages_text = []
+            for page_idx, page in enumerate(doc):
+                text = page.get_text("text") or ""
+                pages_text.append(text)
+                _extract_fields_from_page(text, page_idx + 1, extracted_fields, method="PYMUPDF")
+
+            extracted_text = "\n--- Page Break ---\n".join(pages_text).strip()
+
+            # Check if native extracted text is essentially empty across all pages (excluding page break delimiters)
+            all_native_text = "".join(pages_text)
+            non_ws_chars = re.sub(r"\s+", "", all_native_text)
+            if len(non_ws_chars) < 30:
+                ocr_needed = True
+
+                if not is_tess_avail:
+                    # Tesseract is not installed or unavailable
+                    ocr_performed = False
+                    extraction_method = "SCANNED_PDF_NO_OCR"
+                    doc_status = "EXTRACTION_FAILED"
+                    incomplete_reason = f"Document is a scanned PDF with insufficient text layer, and OCR engine is unavailable ({tess_status_msg})."
+                    extracted_text = f"Incomplete extraction: Document is a scanned PDF with insufficient text layer, and OCR engine is unavailable ({tess_status_msg})."
+                else:
+                    # Render pages to images using PyMuPDF and run actual Tesseract OCR
+                    num_pages_to_ocr = min(max_ocr_pages, page_count)
+                    ocr_pages_text = []
+                    ocr_errors = []
+                    ocr_performed = True
+
+                    # Clear any sparse fields from native pass
+                    extracted_fields.clear()
+
+                    for page_idx in range(num_pages_to_ocr):
+                        try:
+                            page = doc[page_idx]
+                            pix = page.get_pixmap(dpi=150)
+                            img = Image.open(io.BytesIO(pix.tobytes("png")))
+                            ocr_page_text = pytesseract.image_to_string(img, timeout=ocr_timeout_sec) or ""
+                            ocr_pages_text.append(ocr_page_text)
+                            if ocr_page_text.strip():
+                                _extract_fields_from_page(ocr_page_text, page_idx + 1, extracted_fields, method="OCR_TESSERACT")
+                        except Exception as ocr_err:
+                            ocr_errors.append(f"Page {page_idx + 1}: {str(ocr_err)}")
+
+                    if ocr_errors and not any(t.strip() for t in ocr_pages_text):
+                        doc_status = "EXTRACTION_FAILED"
+                        extraction_method = "OCR_FAILED"
+                        incomplete_reason = f"OCR execution failed on scanned pages: {'; '.join(ocr_errors)}"
+                        extracted_text = f"Incomplete extraction: OCR execution failed ({'; '.join(ocr_errors)})."
+                    else:
+                        combined_ocr = "\n--- Page Break ---\n".join(ocr_pages_text).strip()
+                        non_ws_ocr = re.sub(r"\s+", "", combined_ocr)
+                        if len(non_ws_ocr) >= 15:
+                            # Useful text extracted
+                            extraction_method = "OCR_TESSERACT"
+                            doc_status = "PROCESSED"
+                            extracted_text = combined_ocr
+                        else:
+                            # OCR ran, but pages are blank or unreadable
+                            doc_status = "EXTRACTION_FAILED"
+                            extraction_method = "OCR_UNREADABLE"
+                            incomplete_reason = "OCR was attempted on scanned pages, but no legible or useful text could be extracted."
+                            extracted_text = "Incomplete extraction: Document pages appear unreadable or blank. OCR yielded no usable text."
             else:
-                extraction_method = "SCANNED_PDF_NO_OCR"
+                # Native PyMuPDF text is sufficient
+                extraction_method = "PYMUPDF"
+                ocr_needed = False
                 ocr_performed = False
+                doc_status = "PROCESSED"
+
+        finally:
+            doc.close()
 
     elif mime_type.startswith("image/"):
         extraction_method = "IMAGE_ANALYSIS"
@@ -84,19 +223,34 @@ def extract_document_content(storage_path: str, mime_type: str) -> dict:
             with Image.open(storage_path) as img:
                 width, height = img.size
                 extracted_text = f"Image Evidence: {width}x{height} pixels, format {img.format}."
-                if TESSERACT_AVAILABLE:
-                    ocr_needed = True
+                ocr_needed = True
+
+                if is_tess_avail:
                     try:
-                        ocr_text = pytesseract.image_to_string(img)
+                        ocr_text = pytesseract.image_to_string(img, timeout=ocr_timeout_sec) or ""
+                        ocr_performed = True
                         if ocr_text.strip():
-                            extracted_text += f"\nOCR Output:\n{ocr_text}"
+                            extracted_text += f"\nOCR Output:\n{ocr_text.strip()}"
                             extraction_method = "OCR_TESSERACT"
-                            ocr_performed = True
+                            doc_status = "PROCESSED"
                             _extract_fields_from_page(ocr_text, 1, extracted_fields, method="OCR_TESSERACT")
-                    except Exception:
-                        pass
+                        else:
+                            # Valid photo attachment with no text (e.g. campus photo)
+                            doc_status = "PROCESSED"
+                    except Exception as e:
+                        ocr_performed = True
+                        extraction_method = "OCR_FAILED"
+                        doc_status = "EXTRACTION_FAILED"
+                        incomplete_reason = f"Image OCR error: {str(e)}"
+                        extracted_text += f"\nOCR error: {str(e)}"
+                else:
+                    ocr_performed = False
+                    extraction_method = "IMAGE_ANALYSIS_NO_OCR"
+                    doc_status = "PROCESSED"
         except Exception as e:
             extracted_text = f"Image processing error: {str(e)}"
+            doc_status = "EXTRACTION_FAILED"
+            incomplete_reason = str(e)
 
     return {
         "extracted_text": extracted_text,
@@ -108,7 +262,10 @@ def extract_document_content(storage_path: str, mime_type: str) -> dict:
         "incremental_updates_count": incremental_count,
         "ocr_needed": ocr_needed,
         "ocr_performed": ocr_performed,
-        "ocr_engine_available": TESSERACT_AVAILABLE
+        "ocr_engine_available": is_tess_avail,
+        "status": doc_status,
+        "incomplete_reason": incomplete_reason,
+        "is_complete": doc_status == "PROCESSED"
     }
 
 

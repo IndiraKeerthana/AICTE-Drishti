@@ -69,7 +69,7 @@ def upload_application_document(
         ocr_needed=parsed.get("ocr_needed", False),
         ocr_performed=parsed.get("ocr_performed", False),
         ocr_engine_available=parsed.get("ocr_engine_available", True),
-        status="PROCESSED",
+        status=parsed.get("status", "PROCESSED"),
         page_count=parsed.get("page_count", 1),
         extracted_text=parsed.get("extracted_text", ""),
     )

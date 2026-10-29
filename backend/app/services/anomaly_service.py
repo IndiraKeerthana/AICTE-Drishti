@@ -18,6 +18,12 @@ def inspect_pdf_metadata_and_updates(storage_path: str) -> dict:
     """
     Inspects PDF metadata and counts incremental update markers (%%EOF).
     Multiple %%EOF markers can indicate post-issuance modification.
+
+    Structural Revision vs Cryptographic Signatures:
+    - This check inspects trailer %%EOF marker counts and metadata creation/modification dates.
+    - It detects incremental updates appended after original PDF compilation.
+    - LIMITATION: This is a file structure / revision detection heuristic. It does NOT
+      perform cryptographic digital signature validation (PKI / X.509 / PAdES verification).
     """
     result = {
         "creation_date": None,
@@ -36,7 +42,7 @@ def inspect_pdf_metadata_and_updates(storage_path: str) -> dict:
             result["incremental_updates_count"] = max(0, eof_count - 1)
             if eof_count > 2:
                 result["is_suspicious_modification"] = True
-                result["explanation"] = f"Detected {eof_count} %%EOF trailer blocks, indicating post-issuance file modifications or appended incremental updates."
+                result["explanation"] = f"Detected {eof_count} %%EOF trailer blocks, indicating post-issuance file modifications or appended incremental updates. (Structural revision inspection only; not cryptographic digital signature verification.)"
 
         # PyMuPDF metadata inspection
         doc = fitz.open(storage_path)

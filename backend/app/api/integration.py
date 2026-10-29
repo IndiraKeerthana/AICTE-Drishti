@@ -253,7 +253,7 @@ def submit_rectification_replacement(
         file_size_bytes=file_size,
         mime_type=detected_mime,
         sha256_hash=sha256_hash,
-        status="PROCESSED",
+        status=parsed.get("status", "PROCESSED"),
         page_count=parsed.get("page_count", 1),
         extracted_text=parsed.get("extracted_text", ""),
         phash_value=parsed.get("phash"),

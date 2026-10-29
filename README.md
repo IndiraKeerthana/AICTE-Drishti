@@ -24,7 +24,18 @@ AICTE-Drishti automates preliminary institutional scrutiny, document authenticat
 - **Intelligent Document Processing (IDP)**:
   - Vector PDF text layer parsing and page coordinate extraction using PyMuPDF (`pymupdf`).
   - OCR fallback capability for scanned documents using OpenCV and Tesseract.
+  - In-memory PDF QR code rendering and multi-pass OpenCV decoding for statutory certificates and approvals.
+  - Image QR code extraction with resolution boundaries.
   - Regex structured entity extractors (intake capacity, certificate numbers, land area, expiry dates).
+- **Issuing-Authority Cross-Verification Adapter**:
+  - Cross-references Fire NOC, Building Plan, Layout Approval, Affiliation, and Land Title clearances against simulated state authority registries.
+  - Transparently handles active verification, expiration, revoked/rejected status, institution/location mismatches, and gateway timeouts.
+  - All responses explicitly isolated with `[SIMULATED]` disclosures; never makes unsolicited live external requests.
+- **Document Authenticity & Anomaly Detectors**:
+  - Exact binary duplicate file detection across slots using SHA-256.
+  - Cross-slot campus/lab photo reuse detection using perceptual hashing (`imagehash.phash`).
+  - PDF structural incremental revision inspection via `%%EOF` trailer marker counting.
+  - Clarified scope: detects file revision structures; does not claim cryptographic digital signature verification.
 - **Synthetic Ground-Truth Reconciler**:
   - Embedded baseline records for *Sample Institute of Technology* (`1-9988776655`) with approved intake of **60 seats**.
   - Automatically compares declared intake (e.g. 120 seats) against ground truth.
@@ -130,13 +141,20 @@ AICTE-Drishti includes a pytest test suite covering the entire vertical slice:
 cd backend
 .\.venv\Scripts\pytest.exe -v
 ```
-**Test Results (All 6 Passed)**:
-- `test_health.py::test_health_endpoint` ✅
-- `test_applications.py::test_create_and_list_application` ✅
-- `test_documents.py::test_invalid_file_upload` ✅
-- `test_documents.py::test_valid_pdf_upload_and_duplicate_detection` ✅
-- `test_verification.py::test_synthetic_intake_mismatch_verification` ✅
-- `test_actions_audit.py::test_reviewer_action_and_hash_chained_audit` ✅
+**Test Results (All 55 Passed across 13 test suites)**:
+- `test_actions_audit.py`: Reviewer action audit trail & hash-chain verification ✅
+- `test_applications.py`: Application creation & management lifecycle ✅
+- `test_authority_verification_scenarios.py`: Multi-scenario mock issuing authority cross-checks ✅
+- `test_decision_gating.py`: P0 statutory approval eligibility and decision gating ✅
+- `test_detectors_demo.py`: Image pHash and document anomaly detectors ✅
+- `test_documents.py`: Document upload constraints and SHA-256 duplicate detection ✅
+- `test_health.py`: Application health and service readiness endpoints ✅
+- `test_integration_and_pipeline.py`: End-to-end scrutiny pipeline & officer action flow ✅
+- `test_ocr_document_parser.py`: PyMuPDF and Tesseract scanned-PDF OCR fallbacks ✅
+- `test_officer_alerts_workflow.py`: Deficiency and alert lifecycle management ✅
+- `test_qr_and_authenticity.py`: In-memory PDF QR decoding, URL parameter parsing & authenticity checks ✅
+- `test_verification.py`: Ground-truth intake reconciliation ✅
+- `test_workflow_and_rbac.py`: RBAC permissions & final decision state-locking ✅
 
 ---
 

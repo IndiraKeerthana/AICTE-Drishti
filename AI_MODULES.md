@@ -46,6 +46,7 @@ AICTE-Drishti integrates six specialized intelligence and verification modules i
 1. **Exact Duplicate Detection (SHA-256)**: Identifies identical binary files submitted across different slots or multiple institutions.
 2. **Perceptual Image Hash Reuse (`imagehash.phash`)**: Computes 64-bit discrete cosine transform (DCT) hashes of uploaded photos. A Hamming distance `<= 5` flags visually identical photographs reused across distinct laboratory categories.
 3. **PDF Metadata & Incremental Updates**: Scans binary PDF streams for multiple `%%EOF` markers and conflicting `CreationDate` vs `ModDate` timestamps. Detects post-issuance modifications that warrant officer inspection.
+   - *Limitation & Truth in Advertising*: This check inspects trailer `%%EOF` counts and revision blocks. It detects structural post-export alterations, but does **not** validate cryptographic digital signatures (PKI / X.509 / PAdES).
 
 ### Non-Negotiable Operational Policy
 - The system never uses generic "fraud risk percentages".
@@ -53,19 +54,32 @@ AICTE-Drishti integrates six specialized intelligence and verification modules i
 
 ---
 
-## Module 4: Issuing-Authority Verification Adapter
+## Module 4: Issuing-Authority Verification Adapter & QR Decoding
 - **Source Code**: [`backend/app/services/authority_verification.py`](file:///d:/VerifyAI/backend/app/services/authority_verification.py)
-- **Libraries**: `opencv-python-headless` (`cv2.QRCodeDetector`), `json`, `re`
+- **Libraries**: `pymupdf` (`fitz`), `opencv-python-headless` (`cv2.QRCodeDetector`), `Pillow` (`PIL`), `json`, `re`, `urllib.parse`
 
-### Capabilities
-1. **2D QR Code Extraction & Decoding**: Reads 2D QR codes directly from document pages and image uploads using OpenCV.
-2. **Query & Reference Extraction**: Parses structured JSON payloads and URL query parameters (e.g. `?ref=FS-2025-9981`) embedded in QR codes.
-3. **Pluggable Authority Gateway**:
-   - `VERIFIED`: Authentic certificate confirmed in issuing authority registry.
-   - `EXPIRED`: Registry confirms certificate was issued but has passed validity.
-   - `MISMATCH_DETECTED`: Authority record attributes contradict submitted document.
-   - `SOURCE_UNAVAILABLE`: External registry endpoint unreachable or certificate not indexed.
-4. **Synthetic Ground-Truth Isolation**: All prototype registry responses are explicitly tagged with `is_simulated=True` and clear explanatory notes.
+### Capabilities Implemented
+1. **In-Memory PDF QR Code Rendering & Decoding**: Renders PDF pages in-memory to pixmaps using PyMuPDF (scans up to first 3 pages at 150 DPI) and feeds them to OpenCV multi-pass detection (raw BGR, grayscale, Otsu thresholding). Does **not** pass raw PDF paths to `cv2.imread`.
+2. **Image QR Decoding with Resolution Limits**: Direct QR decoding for uploaded image formats (PNG, JPG, TIFF) with resolution safeguards (automatically scales down if dimensions exceed 3000px).
+3. **Structured Outcome & Audit Tracking**: Records `attempted: bool`, `found: bool`, `page_number: int`, `pages_scanned: int`, and descriptive `notes`. Missing or unreadable QR codes gracefully fall back to text extraction and are **never** automatically classified as fraud.
+4. **URL & Reference Key Resolution**: Extracts certificate IDs from JSON payloads, statutory reference prefixes, URL path segments, or URL query parameters (`?cert=`, `?ref=`, `?id=`, `?approval_no=`).
+5. **Simulated Issuing Authority Gateway**:
+   - `VERIFIED`: Matching authority record, matching institution, matching location, active status.
+   - `EXPIRED`: Registry confirms certificate was issued but validity period ended.
+   - `STATUS_INVALID`: Registry marks approval as revoked or rejected.
+   - `LOCATION_MISMATCH`: Property location differs from declared campus.
+   - `ENTITY_MISMATCH`: Approval belongs to another institution in registry.
+   - `RECORD_NOT_FOUND`: Reference not indexed in synthetic registry (explained without fraud accusation).
+   - `EXTRACTION_INCOMPLETE`: Reference could not be legibly extracted (requests manual inspection).
+   - `AUTHORITY_UNAVAILABLE`: Simulated external portal offline/timeout.
+6. **Synthetic Ground-Truth Isolation & Disclosure**:
+   - Prototype authority checks operate strictly against synthetic mock records (`SIMULATED_AUTHORITY_REGISTRY`).
+   - Every verification result explicitly carries `[SIMULATED]` in `source_name` and `is_simulated = True`.
+   - Never claims live government verification when using synthetic test data.
+
+### Unsupported Capabilities & Remaining Limitations
+- **Live State Portal Integrations**: Government departments across states currently do not offer standardized public APIs for real-time validation; connections are simulated via mock registries.
+- **Cryptographic Digital Signature Verification**: Cryptographic certificate revocation (CRL/OCSP) and PKI/X.509 signature validation are not currently supported; the system relies on trailer `%%EOF` incremental update detection.
 
 ---
 

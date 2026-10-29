@@ -80,15 +80,28 @@ def test_officer_alerts_full_lifecycle(client):
     hist_alert = next(a for a in all_alerts if a["id"] == intake_alert["id"])
     assert hist_alert["status"] == "RESOLVED"
 
-    # 8. Record Final Decision and verify clean application state
-    dec_res = client.post(
+    # 8a. Gating blocks premature approval recommendation before mandatory documents are submitted
+    blocked_dec = client.post(
         f"/api/applications/{app_id}/decision",
         json={
             "decision": "RECOMMEND_APPROVAL",
-            "justification_remarks": "All regulatory requirements satisfied. Recommending approval.",
+            "justification_remarks": "Premature approval attempt without mandatory documents.",
+            "officer_name": "Prof. R. K. Verma (Competent Authority)"
+        },
+        headers={"X-User-Role": "APPROVER", "X-User-Name": "approver1"}
+    )
+    assert blocked_dec.status_code == 422
+    assert "Approval blocked" in blocked_dec.json()["detail"]
+
+    # 8b. Record Final Decision (RECOMMEND_REJECTION) and verify clean application state
+    dec_res = client.post(
+        f"/api/applications/{app_id}/decision",
+        json={
+            "decision": "RECOMMEND_REJECTION",
+            "justification_remarks": "Mandatory documentation not furnished by statutory deadline.",
             "officer_name": "Prof. R. K. Verma (Competent Authority)"
         },
         headers={"X-User-Role": "APPROVER", "X-User-Name": "approver1"}
     )
     assert dec_res.status_code == 200
-    assert dec_res.json()["status"] == "APPROVED"
+    assert dec_res.json()["status"] == "REJECTED"

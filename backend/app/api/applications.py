@@ -315,7 +315,11 @@ def get_application(
                 AuthorityVerification.document_id == doc.id
             ).first()
 
-            if auth_v:
+            if doc.status == "EXTRACTION_FAILED" or (doc.ocr_needed and (not doc.extracted_text or "Incomplete extraction" in doc.extracted_text)):
+                verif_status = "UNREADABLE"
+                verif_source = "Local Inspection Engine"
+                verif_evidence = doc.extracted_text or "Document text could not be extracted cleanly from scanned image."
+            elif auth_v:
                 verif_source = f"{auth_v.source_name} [DEMO/SIMULATED]" if auth_v.is_simulated else auth_v.source_name
                 verif_evidence = auth_v.evidence_payload
                 if auth_v.status == "SOURCE_UNAVAILABLE":
@@ -327,25 +331,19 @@ def get_application(
                 else:
                     verif_status = auth_v.status
             else:
-                # Check if unreadable
-                if doc.ocr_needed and not doc.extracted_text:
-                    verif_status = "UNREADABLE"
-                    verif_source = "Local Inspection Engine"
-                    verif_evidence = "Document text could not be extracted cleanly from scanned image."
-                else:
-                    # Check if document has associated open finding
-                    has_finding = any(
-                        f.supporting_document_id == doc.id and f.review_status != "RESOLVED"
-                        for f in app.findings
-                    )
-                    if has_finding:
-                        verif_status = "INCONSISTENT"
-                        verif_source = "AICTE Automated Scrutiny Rules"
-                        verif_evidence = "Automated compliance checks noted potential discrepancies requiring verification."
-                    elif verif_status not in ("EXPIRED", "UNREADABLE"):
-                        verif_status = "VERIFIED"
-                        verif_source = "AICTE Preliminary Scrutiny Engine"
-                        verif_evidence = "Document structure and declared fields successfully reconciled."
+                # Check if document has associated open finding
+                has_finding = any(
+                    f.supporting_document_id == doc.id and f.review_status != "RESOLVED"
+                    for f in app.findings
+                )
+                if has_finding:
+                    verif_status = "INCONSISTENT"
+                    verif_source = "AICTE Automated Scrutiny Rules"
+                    verif_evidence = "Automated compliance checks noted potential discrepancies requiring verification."
+                elif verif_status not in ("EXPIRED", "UNREADABLE"):
+                    verif_status = "VERIFIED"
+                    verif_source = "AICTE Preliminary Scrutiny Engine"
+                    verif_evidence = "Document structure and declared fields successfully reconciled."
 
         checklist_items.append(DocumentChecklistItem(
             category_code=cat_code,
@@ -433,6 +431,12 @@ def issue_deficiency_notice(
     if not app:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found")
 
+    if app.status in ("APPROVED", "REJECTED") or app.final_decision in ("RECOMMEND_APPROVAL", "RECOMMEND_REJECTION"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Application has already been finalized ({app.final_decision or app.status}). Return application to review before issuing new deficiency notices."
+        )
+
     selected_findings = db.query(Finding).filter(
         Finding.application_id == app.id,
         Finding.id.in_(payload.finding_ids)
@@ -515,6 +519,12 @@ def return_to_review(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found")
 
     officer_name = current_user.full_name or "Scrutiny Officer"
+
+    # Reset final decision state if application was previously decided
+    app.final_decision = None
+    app.decided_by = None
+    app.decided_at = None
+    app.decision_remarks = None
 
     # Re-run automated scrutiny
     run = execute_automated_scrutiny(db, app.id, trigger_source="OFFICER_RETURN_TO_REVIEW")

@@ -1,10 +1,17 @@
 import json
 import datetime
 import re
+from urllib.parse import urlparse, parse_qs
 import cv2
 import numpy as np
 from pathlib import Path
 from PIL import Image
+
+try:
+    import fitz  # PyMuPDF
+    PYMUPDF_AVAILABLE = True
+except ImportError:
+    PYMUPDF_AVAILABLE = False
 
 # Simulated Issuing Authority Registry Database (Synthetic ground-truth for SIH testing)
 # Clearly identified as synthetic mock records. Not connected to live authority databases.
@@ -154,25 +161,239 @@ AUTHORITY_NAMES_BY_TYPE = {
 }
 
 
+def _decode_qr_from_cv_image(cv_img: np.ndarray) -> str | None:
+    """
+    Decodes QR code from a BGR numpy array using multi-pass OpenCV detection.
+    Pass 1: Original BGR image
+    Pass 2: Grayscale
+    Pass 3: Otsu thresholding
+    """
+    if cv_img is None or cv_img.size == 0:
+        return None
+
+    detector = cv2.QRCodeDetector()
+
+    # Pass 1: Raw BGR
+    try:
+        data, _, _ = detector.detectAndDecode(cv_img)
+        if data and data.strip():
+            return data.strip()
+    except Exception:
+        pass
+
+    # Pass 2: Grayscale
+    gray = None
+    try:
+        if len(cv_img.shape) == 3 and cv_img.shape[2] == 3:
+            gray = cv2.cvtColor(cv_img, cv2.COLOR_BGR2GRAY)
+        else:
+            gray = cv_img
+        data, _, _ = detector.detectAndDecode(gray)
+        if data and data.strip():
+            return data.strip()
+    except Exception:
+        gray = None
+
+    # Pass 3: Thresholded
+    if gray is not None:
+        try:
+            _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            data, _, _ = detector.detectAndDecode(thresh)
+            if data and data.strip():
+                return data.strip()
+        except Exception:
+            pass
+
+    return None
+
+
+def decode_qr_code(
+    file_path: str,
+    mime_type: str | None = None,
+    max_pages: int = 3,
+    target_dpi: int = 150,
+    max_dimension: int = 3000
+) -> dict:
+    """
+    Decodes 2D QR codes from PDF or image documents.
+    For PDFs: renders pages using PyMuPDF in-memory and passes to OpenCV (does NOT call cv2.imread on PDF).
+    For Images: checks resolution and resizes if dimension exceeds max_dimension.
+
+    Limits:
+    - PDF pages: first `max_pages` pages (default: 3)
+    - Image size: scaled proportionally if max dimension > `max_dimension` (default: 3000)
+    - Rendering resolution: `target_dpi` (default: 150)
+
+    Returns:
+    {
+        "attempted": bool,
+        "found": bool,
+        "payload": str | None,
+        "page_number": int | None,
+        "pages_scanned": int,
+        "source_type": "PDF" | "IMAGE" | "UNKNOWN",
+        "notes": str,
+        "error": str | None
+    }
+    """
+    res = {
+        "attempted": True,
+        "found": False,
+        "payload": None,
+        "page_number": None,
+        "pages_scanned": 0,
+        "source_type": "UNKNOWN",
+        "notes": "",
+        "error": None
+    }
+
+    path_obj = Path(file_path)
+    if not path_obj.exists():
+        res["notes"] = f"File does not exist: {file_path}"
+        res["error"] = "FILE_NOT_FOUND"
+        return res
+
+    # Determine if PDF
+    is_pdf = False
+    if mime_type == "application/pdf" or path_obj.suffix.lower() == ".pdf":
+        is_pdf = True
+    else:
+        # Check magic bytes
+        try:
+            with open(file_path, "rb") as f:
+                header = f.read(5)
+                if header.startswith(b"%PDF"):
+                    is_pdf = True
+        except Exception:
+            pass
+
+    if is_pdf:
+        res["source_type"] = "PDF"
+        if not PYMUPDF_AVAILABLE:
+            res["notes"] = "PyMuPDF (fitz) is not available on host. Cannot render PDF for QR decoding."
+            res["error"] = "DEPENDENCY_MISSING"
+            return res
+
+        try:
+            doc = fitz.open(file_path)
+            total_pages = len(doc)
+            pages_to_check = min(total_pages, max_pages)
+
+            for page_idx in range(pages_to_check):
+                res["pages_scanned"] = page_idx + 1
+                page = doc[page_idx]
+                pix = page.get_pixmap(dpi=target_dpi)
+                pil_img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+                cv_img = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
+
+                payload = _decode_qr_from_cv_image(cv_img)
+                if payload:
+                    res["found"] = True
+                    res["payload"] = payload
+                    res["page_number"] = page_idx + 1
+                    res["notes"] = f"QR code successfully detected and decoded on page {page_idx + 1} of PDF."
+                    doc.close()
+                    return res
+
+            doc.close()
+            res["notes"] = f"No readable QR code found in first {pages_to_check} page(s) of PDF (total {total_pages} pages)."
+            return res
+        except Exception as e:
+            res["notes"] = f"Error rendering PDF for QR decoding: {str(e)}"
+            res["error"] = str(e)
+            return res
+
+    # Handle as Image
+    res["source_type"] = "IMAGE"
+    try:
+        with Image.open(file_path) as pil_img:
+            w, h = pil_img.size
+            if w > max_dimension or h > max_dimension:
+                pil_img.thumbnail((max_dimension, max_dimension), Image.Resampling.LANCZOS)
+            
+            rgb_img = pil_img.convert("RGB")
+            cv_img = cv2.cvtColor(np.array(rgb_img), cv2.COLOR_RGB2BGR)
+
+        res["pages_scanned"] = 1
+        payload = _decode_qr_from_cv_image(cv_img)
+        if payload:
+            res["found"] = True
+            res["payload"] = payload
+            res["page_number"] = 1
+            res["notes"] = "QR code successfully detected and decoded from image."
+            return res
+        else:
+            res["notes"] = "No readable QR code found in image."
+            return res
+    except Exception as e:
+        res["notes"] = f"Error reading image for QR decoding: {str(e)}"
+        res["error"] = str(e)
+        return res
+
+
 def decode_qr_code_from_image(image_path: str) -> tuple[str | None, str]:
     """
     Decodes 2D QR codes using OpenCV QRCodeDetector.
+    Maintained for backward compatibility. Supports both PDF and image documents.
     Returns: (decoded_text_or_none, detector_status_notes)
     """
-    try:
-        img = cv2.imread(image_path)
-        if img is None:
-            pil_img = Image.open(image_path).convert("RGB")
-            img = np.array(pil_img)
-            img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+    res = decode_qr_code(image_path)
+    return res.get("payload"), res.get("notes", "")
 
-        detector = cv2.QRCodeDetector()
-        data, points, _ = detector.detectAndDecode(img)
-        if data and data.strip():
-            return data.strip(), "QR code successfully detected and decoded."
-        return None, "No readable QR code found in document."
-    except Exception as e:
-        return None, f"QR decoding attempt returned error: {str(e)}"
+
+def _extract_reference_from_payload(payload: str) -> str | None:
+    """
+    Extracts an approval/certificate reference from a QR payload.
+    Supports:
+    - JSON strings (e.g. {"cert_id": "...", "ref_no": "...", "approval_ref": "..."})
+    - URLs with query params (e.g. ?cert=..., ?ref=..., ?id=..., ?approval_no=...)
+    - URLs with path parameters (e.g. /verify/FS-2026-1044)
+    - Plain statutory reference strings (e.g. FS-2026-1044, BP-2025-MUN-881)
+    """
+    if not payload:
+        return None
+    p = payload.strip()
+
+    # 1. Try JSON
+    if (p.startswith("{") and p.endswith("}")) or (p.startswith("[") and p.endswith("]")):
+        try:
+            d = json.loads(p)
+            if isinstance(d, dict):
+                for k in ("cert_id", "ref_no", "approval_ref", "certificate_number", "approval_no", "ref", "id", "cert"):
+                    val = d.get(k)
+                    if val and isinstance(val, str) and val.strip():
+                        return val.strip()
+        except Exception:
+            pass
+
+    # 2. Try URL
+    if "://" in p or p.startswith("http") or p.startswith("www."):
+        try:
+            url_str = p if "://" in p else f"https://{p}"
+            parsed_url = urlparse(url_str)
+            qs = parse_qs(parsed_url.query)
+            for k in ("cert", "ref", "id", "approval_ref", "cert_id", "ref_no", "approval_no", "certificate_no"):
+                if k in qs and qs[k]:
+                    return qs[k][0].strip()
+            # If no query parameter, check path segments
+            path_parts = [part for part in parsed_url.path.split("/") if part]
+            for part in reversed(path_parts):
+                if re.match(r"^(?:FS|BP|UNIV|ENV|AFFIL|NOC|DEED)-[A-Za-z0-9\-]+$", part, re.IGNORECASE):
+                    return part.strip()
+        except Exception:
+            pass
+
+    # 3. Regex search for known statutory prefix pattern
+    match = re.search(r"\b((?:FS|BP|UNIV|ENV|AFFIL|NOC|DEED)-[A-Za-z0-9\-]{4,30})\b", p, re.IGNORECASE)
+    if match:
+        return match.group(1).strip()
+
+    # 4. Regex for query string params if malformed URL
+    ref_match = re.search(r"[?&](?:ref|cert|id|approval_no)=([A-Za-z0-9\-_]+)", p, re.IGNORECASE)
+    if ref_match:
+        return ref_match.group(1).strip()
+
+    return p
 
 def _norm_location_tokens(loc_str: str) -> set[str]:
     """Extract normalized alphanumeric tokens from location string, excluding common administrative stop words."""
@@ -186,7 +407,8 @@ def verify_against_authority_registry(
     cert_type: str = "FIRE_SAFETY_NOC",
     institution_name: str | None = None,
     declared_location: str | None = None,
-    qr_payload: str | None = None
+    qr_payload: str | None = None,
+    qr_metadata: dict | None = None
 ) -> dict:
     """
     Simulated External Authority Cross-Verification Engine.
@@ -209,22 +431,46 @@ def verify_against_authority_registry(
     issuing_authority = AUTHORITY_NAMES_BY_TYPE.get(cert_type, "Issuing Authority Gateway")
     source_name = f"{issuing_authority} [SIMULATED]"
 
-    # Resolve lookup key from QR payload if present
+    # Resolve lookup key and source
     lookup_key = cert_reference
+    lookup_source = "EXTRACTED_TEXT" if cert_reference else "UNRESOLVED"
     if qr_payload:
-        try:
-            qr_dict = json.loads(qr_payload)
-            lookup_key = qr_dict.get("cert_id") or qr_dict.get("ref_no") or qr_dict.get("approval_ref") or lookup_key
-        except Exception:
-            ref_match = re.search(r"[?&]ref=([A-Za-z0-9\-_]+)", qr_payload)
-            if ref_match:
-                lookup_key = ref_match.group(1)
-            elif any(prefix in qr_payload for prefix in ("FS-", "BP-", "UNIV-", "ENV-", "AFFIL-")):
-                lookup_key = qr_payload.strip()
+        extracted_from_qr = _extract_reference_from_payload(qr_payload)
+        if extracted_from_qr:
+            lookup_key = extracted_from_qr
+            lookup_source = "QR_CODE"
+
+    # Resolve QR metadata
+    qr_attempted = False
+    qr_found = False
+    qr_notes = "QR decoding not invoked."
+    qr_page = None
+    qr_pages_scanned = 0
+    if qr_metadata:
+        qr_attempted = qr_metadata.get("attempted", False)
+        qr_found = qr_metadata.get("found", False)
+        qr_notes = qr_metadata.get("notes", "")
+        qr_page = qr_metadata.get("page_number")
+        qr_pages_scanned = qr_metadata.get("pages_scanned", 0)
+    elif qr_payload:
+        qr_attempted = True
+        qr_found = True
+        qr_notes = "QR code payload supplied."
+
+    def _attach_meta(result_dict: dict) -> dict:
+        result_dict["lookup_source"] = lookup_source
+        result_dict["qr_attempted"] = qr_attempted
+        result_dict["qr_found"] = qr_found
+        result_dict["qr_payload"] = qr_payload
+        result_dict["qr_notes"] = qr_notes
+        result_dict["qr_page_number"] = qr_page
+        result_dict["qr_pages_scanned"] = qr_pages_scanned
+        result_dict["is_simulated"] = True
+        return result_dict
 
     # Case 1: Incomplete Extraction (no reference found in document)
     if not lookup_key or lookup_key.strip() in ("", "UNKNOWN", "NOT_FOUND"):
-        return {
+        return _attach_meta({
             "outcome": "EXTRACTION_INCOMPLETE",
             "status": "SOURCE_UNAVAILABLE",
             "source_name": source_name,
@@ -239,13 +485,13 @@ def verify_against_authority_registry(
             "matched_record": None,
             "attempt_timestamp": now_iso,
             "explanation": f"Approval reference could not be extracted for {cert_type}. Manual inspection is required."
-        }
+        })
 
     lookup_clean = lookup_key.strip()
 
     # Case 2: Authority Service Unavailable / Gateway Timeout (Scenario G)
     if lookup_clean == "ENV-GATEWAY-TIMEOUT" or "TIMEOUT" in lookup_clean or "OFFLINE" in lookup_clean:
-        return {
+        return _attach_meta({
             "outcome": "AUTHORITY_UNAVAILABLE",
             "status": "SOURCE_UNAVAILABLE",
             "source_name": source_name,
@@ -260,11 +506,11 @@ def verify_against_authority_registry(
             "matched_record": None,
             "attempt_timestamp": now_iso,
             "explanation": f"Mock authority gateway for {issuing_authority} is temporarily unreachable. Check could not be completed."
-        }
+        })
 
     # Case 3: Record Not Found in Registry (Scenario B)
     if lookup_clean not in SIMULATED_AUTHORITY_REGISTRY:
-        return {
+        return _attach_meta({
             "outcome": "RECORD_NOT_FOUND",
             "status": "MISMATCH_DETECTED",
             "source_name": source_name,
@@ -282,14 +528,14 @@ def verify_against_authority_registry(
                 f"No matching record found in {issuing_authority} registry for reference '{lookup_clean}'. "
                 "This does not automatically establish an improper submission; manual confirmation with the issuing authority is recommended."
             )
-        }
+        })
 
     record = SIMULATED_AUTHORITY_REGISTRY[lookup_clean]
 
     # Case 4: Invalid Status — Revoked or Rejected (Scenario F)
     rec_status = record.get("status", "ACTIVE")
     if rec_status in ("REVOKED", "REJECTED"):
-        return {
+        return _attach_meta({
             "outcome": "STATUS_INVALID",
             "status": "MISMATCH_DETECTED",
             "source_name": source_name,
@@ -304,11 +550,11 @@ def verify_against_authority_registry(
             "matched_record": record,
             "attempt_timestamp": now_iso,
             "explanation": f"The synthetic authority registry records this approval as {rec_status}: {record.get('status_reason', '')}"
-        }
+        })
 
     # Case 5: Expired Validity (Scenario F)
     if rec_status == "EXPIRED":
-        return {
+        return _attach_meta({
             "outcome": "EXPIRED",
             "status": "EXPIRED",
             "source_name": source_name,
@@ -323,14 +569,14 @@ def verify_against_authority_registry(
             "matched_record": record,
             "attempt_timestamp": now_iso,
             "explanation": f"Issuing authority confirms certificate '{lookup_clean}' expired on {record.get('valid_till')}."
-        }
+        })
 
     # Case 6: Institution / Entity Mismatch (Scenario C)
     if institution_name and record.get("institution_name"):
         from app.services.anomaly_service import evaluate_institution_name_similarity
         score, acceptable = evaluate_institution_name_similarity(record["institution_name"], institution_name)
         if not acceptable:
-            return {
+            return _attach_meta({
                 "outcome": "ENTITY_MISMATCH",
                 "status": "MISMATCH_DETECTED",
                 "source_name": source_name,
@@ -351,7 +597,7 @@ def verify_against_authority_registry(
                     f"Approval reference belongs to a different institution ('{record['institution_name']}') in the authority registry. "
                     "Manual verification of institutional ownership is required."
                 )
-            }
+            })
 
     # Case 7: Approved Location Mismatch (Scenario D)
     if declared_location and record.get("approved_location"):
@@ -361,7 +607,7 @@ def verify_against_authority_registry(
 
         # If location tokens show stark disagreement (e.g. Hadapsar vs Kothrud)
         if ("hadapsar" in rec_tokens and "kothrud" in dec_tokens) or (len(common) == 0 and len(rec_tokens) > 0 and len(dec_tokens) > 0):
-            return {
+            return _attach_meta({
                 "outcome": "LOCATION_MISMATCH",
                 "status": "MISMATCH_DETECTED",
                 "source_name": source_name,
@@ -382,10 +628,10 @@ def verify_against_authority_registry(
                     f"Approved location in {issuing_authority} registry ('{record['approved_location']}') "
                     f"differs from application campus ('{declared_location}')."
                 )
-            }
+            })
 
     # Case 8: Successful Verification (Scenario A)
-    return {
+    return _attach_meta({
         "outcome": "VERIFIED",
         "status": "VERIFIED",
         "source_name": source_name,
@@ -399,5 +645,5 @@ def verify_against_authority_registry(
         "recommended_action": "Statutory verification complete. Proceed with scrutiny review.",
         "matched_record": record,
         "attempt_timestamp": now_iso,
-        "explanation": f"Authenticity verified via {source_name}. Certificate valid till {record.get('valid_till', 'End of AY')}."
-    }
+        "explanation": f"Authenticity verified via {source_name}. [SIMULATED EXTERNAL CHECK — SYNTHETIC DATA] Certificate valid till {record.get('valid_till', 'End of AY')}."
+    })
